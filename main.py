@@ -2,13 +2,16 @@ from fastapi import FastAPI
 from sqlalchemy import text
 
 from app.config.settings import settings
-from app.database.connection import engine
+from app.config.connection import engine
+from app.api.routes.incidents import router as incidents_router
 
 
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
 )
+
+app.include_router(incidents_router)
 
 
 @app.get("/health")
