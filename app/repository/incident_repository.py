@@ -1,8 +1,9 @@
 import uuid
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.dto.incident import Incident
+from app.api.dto.incident import Incident, IncidentStatus, Severity
 from app.model.incident_record import IncidentRecord
 from app.repository.incident_mapper import to_domain, to_record
 
@@ -24,3 +25,31 @@ class IncidentRepository:
     def get(self, incident_id: uuid.UUID) -> Incident | None:
         record = self._session.get(IncidentRecord, incident_id)
         return None if record is None else to_domain(record)
+
+    def list(
+        self,
+        *,
+        service: str | None = None,
+        severity: Severity | None = None,
+        status: IncidentStatus | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[Incident]:
+        """Newest first. Filters are optional and combined with AND.
+
+        Served by ix_incidents_service_reported_at when filtering by service.
+        `id` is a tiebreaker so pages stay stable when timestamps are equal.
+        """
+        stmt = select(IncidentRecord)
+        if service is not None:
+            stmt = stmt.where(IncidentRecord.service == service)
+        if severity is not None:
+            stmt = stmt.where(IncidentRecord.severity == severity.value)
+        if status is not None:
+            stmt = stmt.where(IncidentRecord.status == status.value)
+        stmt = (
+            stmt.order_by(IncidentRecord.reported_at.desc(), IncidentRecord.id)
+            .limit(limit)
+            .offset(offset)
+        )
+        return [to_domain(record) for record in self._session.scalars(stmt)]

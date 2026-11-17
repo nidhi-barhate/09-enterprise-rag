@@ -80,3 +80,66 @@ def test_non_utc_input_is_normalised_before_storage(session):
     assert repo.get(incident.id).reported_at == datetime.datetime(
         2026, 1, 2, 10, 0, tzinfo=UTC
     )
+
+
+# --- list(): each test uses a unique service name so existing rows can't interfere ---
+
+
+def _seed(repo, service, count, **overrides):
+    incidents = []
+    for i in range(count):
+        incident = make_incident(
+            service=service,
+            reported_at=datetime.datetime(2026, 2, 1, 10, i, tzinfo=UTC),
+            **overrides,
+        )
+        repo.add(incident)
+        incidents.append(incident)
+    return incidents
+
+
+def test_list_filters_by_service_newest_first(session):
+    repo = IncidentRepository(session)
+    service = f"svc-{uuid.uuid4()}"
+    seeded = _seed(repo, service, 3)
+    _seed(repo, f"other-{uuid.uuid4()}", 2)
+    result = repo.list(service=service)
+    assert [i.id for i in result] == [i.id for i in reversed(seeded)]
+
+
+def test_list_filters_by_severity_and_status_combined(session):
+    repo = IncidentRepository(session)
+    service = f"svc-{uuid.uuid4()}"
+    sev1_open = make_incident(service=service, severity=Severity.SEV1)
+    sev3_open = make_incident(service=service, severity=Severity.SEV3)
+    sev1_mitigated = make_incident(
+        service=service, severity=Severity.SEV1, status=IncidentStatus.MITIGATED
+    )
+    for incident in (sev1_open, sev3_open, sev1_mitigated):
+        repo.add(incident)
+    result = repo.list(
+        service=service, severity=Severity.SEV1, status=IncidentStatus.OPEN
+    )
+    assert [i.id for i in result] == [sev1_open.id]
+
+
+def test_list_paginates_without_overlap(session):
+    repo = IncidentRepository(session)
+    service = f"svc-{uuid.uuid4()}"
+    _seed(repo, service, 5)
+    page1 = repo.list(service=service, limit=2, offset=0)
+    page2 = repo.list(service=service, limit=2, offset=2)
+    page3 = repo.list(service=service, limit=2, offset=4)
+    ids = [i.id for i in page1 + page2 + page3]
+    assert len(ids) == 5
+    assert len(set(ids)) == 5
+
+
+def test_list_without_filters_respects_limit(session):
+    repo = IncidentRepository(session)
+    _seed(repo, f"svc-{uuid.uuid4()}", 3)
+    assert len(repo.list(limit=2)) == 2
+
+
+def test_list_unknown_service_returns_empty(session):
+    assert IncidentRepository(session).list(service=f"none-{uuid.uuid4()}") == []
