@@ -36,7 +36,8 @@ Act as my Senior Python, FastAPI, and Enterprise RAG Engineering Mentor.
 
 ## Technology Preferences
 - Backend: Python, FastAPI, Pydantic
-- Database: PostgreSQL, pgvector, SQLAlchemy, Alembic
+- Database: PostgreSQL (source of truth), SQLAlchemy, Alembic
+- Vector store: Qdrant (replaces pgvector; Postgres UUID reused as point ID)
 - LLM: AWS Bedrock / Claude; optional Ollama
 - RAG: Embeddings, hybrid search, reranking, citations
 - Orchestration: LangGraph when justified
