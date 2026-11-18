@@ -1,4 +1,4 @@
-"""Synthetic incidents for testing search properly.
+"""Synthetic incidents and runbooks for testing search properly.
 
 10 scenarios x 10 incidents, each written with different wording, so a search can
 be checked against a known answer: "payments failing after deploy" should bring
@@ -9,6 +9,7 @@ back the database-pool incidents, not the cache ones. Everything is deterministi
 import datetime
 import uuid
 
+from app.api.dto.document import Document, DocumentType
 from app.api.dto.incident import Incident, IncidentStatus, Severity
 
 UTC = datetime.timezone.utc
@@ -243,3 +244,78 @@ def build_seed_incidents() -> list[Incident]:
                 )
             )
     return incidents
+
+
+# One runbook per scenario, each in four short sections so it is cut into chunks.
+# service=None means the document applies to every service.
+_RUNBOOKS = [
+    ("db-pool", "Database connection pool exhaustion runbook", DocumentType.RUNBOOK, "payment-service", (
+        "Symptoms: Requests fail with 503 or time out. Logs show 'could not obtain connection from pool' or 'too many clients already'. Database CPU is usually low while the connection count sits at its limit.\n\n"
+        "Diagnosis: Check active and idle connections per service on the database dashboard. Compare the application pool size with the database max_connections. Look at recent releases for code paths that open connections without closing them.\n\n"
+        "Fix: Restart the affected pods to release leaked connections. Raise the pool size only as a short-term measure. Roll back the release if the leak started with it, then fix the missing close in the code.\n\n"
+        "Verify: Watch the connection count settle below 70 percent of the limit and confirm the error rate stays normal for at least 30 minutes.")),
+    ("disk-full", "Disk full and log rotation runbook", DocumentType.RUNBOOK, None, (
+        "Symptoms: Jobs fail with 'No space left on device', uploads return 500, or a database stops writing. Alerts show a volume at 100 percent.\n\n"
+        "Diagnosis: Run df -h to find the full volume and df -i to check inodes. Use du -sh on the largest directories, usually /var/log or a temp folder. Check whether log rotation was disabled by a recent config change.\n\n"
+        "Fix: Compress and delete logs older than thirty days, remove abandoned temp files, and re-enable logrotate. If the volume is simply too small, expand it. Never delete database WAL files by hand.\n\n"
+        "Verify: Confirm free space stays above 20 percent and that the next rotation runs on schedule.")),
+    ("tls-cert", "Expired TLS certificate troubleshooting guide", DocumentType.TROUBLESHOOTING_GUIDE, None, (
+        "Symptoms: Browsers show a privacy warning, mobile apps report a secure connection failure, and clients log 'certificate has expired' or an x509 error. Partner integrations suddenly stop working.\n\n"
+        "Diagnosis: Check the certificate end date with openssl s_client against the failing host. Compare what the load balancer presents with what was issued. Look at the renewal job and its alerting, because renewals often fail silently.\n\n"
+        "Fix: Issue a new certificate and attach it to every load balancer and edge node, then reload the services that pin certificates. Repair the renewal job and add an alert thirty days before expiry.\n\n"
+        "Verify: Test from outside the network and from a mobile device, and confirm all regions present the new certificate.")),
+    ("cache-down", "Redis cache outage runbook", DocumentType.RUNBOOK, "catalog-service", (
+        "Symptoms: Pages are slow, the cache hit ratio drops to almost zero, sessions are lost, and database load rises sharply because every request misses the cache.\n\n"
+        "Diagnosis: Check Redis memory usage and evicted keys, look for a recent failover, and read the slow log. Confirm whether clients can still connect and whether they retry after a failover.\n\n"
+        "Fix: Increase Redis memory or tune the eviction policy and key expiry. Protect the database with rate limiting while the cache refills, then warm the cache by replaying the most visited pages.\n\n"
+        "Verify: The hit ratio recovers above 90 percent within ten minutes and database CPU returns to normal.")),
+    ("oom", "Out of memory and memory leak troubleshooting guide", DocumentType.TROUBLESHOOTING_GUIDE, None, (
+        "Symptoms: Pods restart in a loop with OOMKilled, memory climbs steadily until the process dies, or the garbage collector pauses for seconds. A node may evict pods under memory pressure.\n\n"
+        "Diagnosis: Compare memory use before and after the latest release. Take a heap dump or memory profile and look for objects that keep growing, such as caches without eviction. Check the container memory limit against real use.\n\n"
+        "Fix: Roll back the release that introduced the growth, fix the leak, and only raise the memory limit as a temporary measure.\n\n"
+        "Verify: Memory stays flat over several hours and no restarts appear in the pod history.")),
+    ("deploy-regression", "Rolling back a bad release runbook", DocumentType.RUNBOOK, "checkout-service", (
+        "Symptoms: The error rate jumps right after a deploy, a canary shows more errors than the stable version, or a specific endpoint fails with a server error since the release.\n\n"
+        "Decision: If errors started with the release and customers are affected, roll back first and investigate afterwards. Halt the rollout so more pods do not receive the bad version.\n\n"
+        "Rollback: Redeploy the previous version, disable any new feature flags, and check that a database migration in the release can be undone safely before reverting it.\n\n"
+        "Follow-up: Add a regression test that reproduces the failure, review why the canary did not stop the rollout earlier, and redeploy only after the fix is verified.")),
+    ("dns", "DNS resolution failures troubleshooting guide", DocumentType.TROUBLESHOOTING_GUIDE, None, (
+        "Symptoms: Services cannot resolve each other's hostnames, lookups time out intermittently, or logs show UnknownHostException or 'temporary failure in name resolution'.\n\n"
+        "Diagnosis: Run nslookup from a failing pod and from a healthy one. Check whether the cluster DNS pods are restarting or overloaded, and look for a retry loop in a client library that floods the resolver.\n\n"
+        "Fix: Scale the DNS resolver, enable caching, and fix the misbehaving client. For a stale record, update it and wait for the time to live to expire.\n\n"
+        "Verify: Lookup latency stays under 50 ms and no resolution errors appear for thirty minutes.")),
+    ("queue-backlog", "Queue backlog and consumer lag runbook", DocumentType.RUNBOOK, "notification-service", (
+        "Symptoms: Messages are delivered hours late, consumer lag keeps growing, the dead letter queue fills up, or consumers keep rebalancing without making progress.\n\n"
+        "Diagnosis: Compare the arrival rate with the processing rate. Find out whether a slow downstream call blocks each message, and check whether processing time exceeds the poll interval.\n\n"
+        "Fix: Scale up the consumers, add a timeout to the slow downstream call, and drain the backlog. Replay dead letter messages only after the cause is fixed, and make handlers idempotent to avoid duplicate notifications.\n\n"
+        "Verify: Lag trends toward zero and the oldest message age returns to seconds.")),
+    ("upstream", "Third-party provider outage runbook", DocumentType.RUNBOOK, "payment-service", (
+        "Symptoms: Calls to an external provider return 429 or 503, card payments are declined unexpectedly, or requests to the vendor time out while our own service is healthy.\n\n"
+        "Diagnosis: Check the provider status page and compare our request rate with the contract limit. Confirm that the failures come from the vendor and not from our network.\n\n"
+        "Fix: Enable retries with exponential backoff, reduce non-essential calls, and switch traffic to the secondary provider if there is one. Contact the vendor with request ids and timestamps.\n\n"
+        "Verify: The success rate returns to normal and no requests remain queued for the failed provider.")),
+    ("slow-query", "Slow database query technical note", DocumentType.TECHNICAL_DOC, "reporting-service", (
+        "Symptoms: Reports and dashboards time out, database CPU is saturated by one statement, replicas lag behind, or the same SELECT appears thousands of times in the slow query log.\n\n"
+        "Diagnosis: Run EXPLAIN ANALYZE on the statement and look for a sequential scan on a large table. Check whether statistics are stale and whether a long running transaction holds locks.\n\n"
+        "Fix: Add the missing index, cancel the runaway queries, and rewrite queries that fire one statement per row. Move heavy exports to a replica or an off-peak window.\n\n"
+        "Verify: The query plan uses the new index and p99 latency returns to its normal range.")),
+]
+
+
+def build_seed_documents() -> list[Document]:
+    created = BASE_DATE - datetime.timedelta(days=30)
+    documents = []
+    for index, (key, title, doc_type, service, content) in enumerate(_RUNBOOKS):
+        documents.append(
+            Document(
+                id=uuid.uuid5(SEED_NAMESPACE, f"document:{key}"),
+                title=title,
+                doc_type=doc_type,
+                service=service,
+                content=content,
+                source=f"seed/{key}.md",
+                tags=[SEED_TAG, f"{SCENARIO_TAG_PREFIX}{key}"],
+                created_at=created + datetime.timedelta(days=index),
+            )
+        )
+    return documents

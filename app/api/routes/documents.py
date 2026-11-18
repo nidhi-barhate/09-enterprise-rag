@@ -1,24 +1,38 @@
 import datetime
+import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_session
+from app.api.deps import get_document_indexer, get_session
 from app.api.dto.document import Document, DocumentCreate, DocumentType
 from app.repository.document_repository import DocumentRepository
+from app.services.document_indexer import DocumentIndexer
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/documents", tags=["documents"])
 
 
 @router.post("", response_model=Document, status_code=status.HTTP_201_CREATED)
-def create_document(payload: DocumentCreate, session: Session = Depends(get_session)):
+def create_document(
+    payload: DocumentCreate,
+    session: Session = Depends(get_session),
+    indexer: DocumentIndexer = Depends(get_document_indexer),
+):
     document = Document(
         id=uuid.uuid4(),
         created_at=datetime.datetime.now(datetime.timezone.utc),
         **payload.model_dump(),
     )
     DocumentRepository(session).add(document)
+    # Best effort, like incidents: PostgreSQL is the source of truth, so an
+    # embedding/Qdrant outage must not block saving a document. A missed index
+    # is healed by `python -m app.scripts.reindex`.
+    try:
+        indexer.index(document)
+    except Exception:
+        logger.warning("Failed to index document %s", document.id, exc_info=True)
     return document
 
 

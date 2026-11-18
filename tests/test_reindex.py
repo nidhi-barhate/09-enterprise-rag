@@ -67,3 +67,63 @@ def test_reindex_all_is_idempotent(session, collection):
 
     assert first == second
     assert client.count(collection_name=collection).count == first
+
+
+# --- documents ---
+
+from app.api.dto.document import Document, DocumentType  # noqa: E402
+from app.repository.document_repository import DocumentRepository  # noqa: E402
+from app.services.document_indexer import DOCUMENT_FILTER_FIELDS, DocumentIndexer  # noqa: E402
+from app.services.reindex import reindex_all_documents  # noqa: E402
+
+
+class FixedBatchEmbedder:
+    def embed_many(self, texts):
+        return [[1.0, 0.0, 0.0, 0.0] for _ in texts]
+
+
+def make_document() -> Document:
+    return Document(
+        id=uuid.uuid4(),
+        title="Runbook",
+        doc_type=DocumentType.RUNBOOK,
+        service=f"svc-{uuid.uuid4()}",
+        content="Promote the replica to primary.",
+        created_at=datetime.datetime(2026, 1, 2, 10, 0, tzinfo=UTC),
+    )
+
+
+@pytest.fixture
+def doc_collection():
+    client = get_qdrant_client()
+    name = f"test-{uuid.uuid4()}"
+    ensure_collection(client, name=name, size=4, keyword_fields=DOCUMENT_FILTER_FIELDS)
+    yield name
+    client.delete_collection(name)
+
+
+def test_reindex_all_documents_indexes_every_document_in_postgres(session, doc_collection):
+    repo = DocumentRepository(session)
+    mine = [make_document() for _ in range(5)]
+    for document in mine:
+        repo.add(document)
+    client = get_qdrant_client()
+    indexer = DocumentIndexer(client, FixedBatchEmbedder(), collection=doc_collection)
+
+    total = reindex_all_documents(repo, indexer, batch_size=2)
+
+    assert total >= 5
+    points, _ = client.scroll(collection_name=doc_collection, limit=1000, with_payload=True)
+    indexed_ids = {p.payload["document_id"] for p in points}
+    assert {str(d.id) for d in mine} <= indexed_ids
+
+
+def test_reindex_all_documents_is_idempotent(session, doc_collection):
+    repo = DocumentRepository(session)
+    repo.add(make_document())
+    client = get_qdrant_client()
+    indexer = DocumentIndexer(client, FixedBatchEmbedder(), collection=doc_collection)
+    reindex_all_documents(repo, indexer)
+    first = client.count(collection_name=doc_collection).count
+    reindex_all_documents(repo, indexer)
+    assert client.count(collection_name=doc_collection).count == first

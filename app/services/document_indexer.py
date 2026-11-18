@@ -12,6 +12,7 @@ from qdrant_client.models import (
 )
 
 from app.api.dto.document import Document
+from app.config.settings import settings
 from app.services.chunker import chunk_text
 
 DOCUMENT_CHUNKS_COLLECTION = "document_chunks"
@@ -104,3 +105,13 @@ class DocumentIndexer:
             collection_name=self._collection,
             points_selector=FilterSelector(filter=_document_filter(document_id)),
         )
+
+
+def create_document_indexer(client: QdrantClient, embedder: BatchEmbedder) -> DocumentIndexer:
+    """The indexer as configured for the app (chunk size and overlap come from settings)."""
+    return DocumentIndexer(
+        client,
+        embedder,
+        chunk_size=settings.document_chunk_size,
+        overlap=settings.document_chunk_overlap,
+    )

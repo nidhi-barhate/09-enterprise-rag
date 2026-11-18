@@ -31,6 +31,15 @@ class DocumentRepository:
         stmt = select(DocumentRecord).where(DocumentRecord.id.in_(ids))
         return {r.id: to_domain(r) for r in self._session.scalars(stmt)}
 
+    def delete(self, document_id: uuid.UUID) -> bool:
+        """Delete one document. Returns False if it did not exist."""
+        record = self._session.get(DocumentRecord, document_id)
+        if record is None:
+            return False
+        self._session.delete(record)
+        self._session.flush()
+        return True
+
     def list(
         self,
         *,

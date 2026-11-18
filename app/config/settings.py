@@ -9,6 +9,11 @@ class Settings(BaseSettings):
     database_url: str
     qdrant_url: str = "http://localhost:6333"
 
+    # How documents are cut before embedding. Starting guesses, to be tuned with
+    # the evaluation script on real runbooks.
+    document_chunk_size: int = 400
+    document_chunk_overlap: int = 50
+
     ollama_base_url: str = "http://localhost:11434"
     ollama_model_embedding: str = "nomic-embed-text:latest"
     # Embeddings are fast; keep this far below the 300s used for chat models.

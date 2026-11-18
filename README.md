@@ -2,7 +2,7 @@
 
 > A production-oriented Enterprise RAG system built using Python, FastAPI, PostgreSQL, Qdrant, and Ollama that helps engineering teams investigate incidents using historical incident reports, runbooks, troubleshooting guides, and technical documentation, with grounded answers and citations.
 
-> **Status:** Phase 1 (Knowledge Foundation) is complete. Phase 2 (RAG Engine) is in progress: semantic search over incidents works end to end and is measured against a seeded test dataset. Document chunking, indexing, and search exist as a tested service layer but are **not yet exposed through the API**. Hybrid search, reranking, grounded answers, and the UI are **Planned**.
+> **Status:** Phase 1 (Knowledge Foundation) is complete. Phase 2 (RAG Engine) is in progress: semantic search over incidents works end to end and is measured against a seeded test dataset. Incidents and documents are both indexed and searchable through the API, and a simple web page at `/ui/` searches and browses them. Hybrid search, reranking, and grounded answers are **Planned**.
 
 ---
 
@@ -69,7 +69,7 @@ Runbooks, troubleshooting guides, and technical docs are stored as `Document`s.
 - `DocumentType` enum: `runbook`, `troubleshooting_guide`, `technical_doc`
 - Optional `service` (a document can apply to every service)
 - Server-generated `id` and UTC `created_at`
-- Create, get, and list through the API (storage only; see *Planned* for search)
+- Create, get, and list through the API; creating a document also indexes it (best effort)
 
 ---
 
@@ -129,10 +129,12 @@ Mapper  ──>  ORM Record  ──>  PostgreSQL
 | `POST` | `/incidents` | Create an incident (server generates the id) and index it |
 | `GET` | `/incidents/{id}` | Fetch one incident (404 if unknown) |
 | `GET` | `/incidents` | List incidents: `service`, `severity`, `status`, `limit`, `offset` |
-| `POST` | `/documents` | Create a document (stored in PostgreSQL only) |
+| `POST` | `/documents` | Create a document and index its chunks (best effort) |
 | `GET` | `/documents/{id}` | Fetch one document |
 | `GET` | `/documents` | List documents: `service`, `doc_type`, `limit`, `offset` |
 | `GET` | `/search/incidents` | Semantic search: `q`, `service`, `severity`, `status`, `limit`, `min_score` |
+| `GET` | `/search/documents` | Best matching passage of each document: `q`, `service`, `doc_type`, `limit`, `min_score` |
+| `GET` | `/ui/` | The search and browse page (`/` redirects here) |
 
 ```text
 Request
@@ -191,7 +193,7 @@ Ranked results: incident + score
 
 ---
 
-### ✂️ Document Chunking, Indexing, and Search *(service layer)*
+### ✂️ Document Chunking, Indexing, and Search
 
 Long runbooks are split into chunks so each chunk gets its own vector and keeps a single topic.
 
@@ -218,16 +220,33 @@ search → best chunks → keep the best chunk per document → load documents f
 - **Indexer:** embeds first and writes second (an Ollama failure leaves existing chunks untouched), removes chunks that no longer exist when a document gets shorter, and can delete all chunks of a document
 - **Search:** returns the **best passage per document** with its score, so the matched text can be shown as a citation
 - A document **without a service applies to every service**, so it stays in results when filtering by service
-- ⚠️ Not wired to the API yet: `POST /documents` does not index, there is no `/search/documents` endpoint, and the real `document_chunks` collection has not been created
+- Wired to the API: `POST /documents` indexes best effort, `GET /search/documents` searches, and `python -m app.scripts.reindex` covers documents. The collection is created at startup.
+- Chunk size and overlap are settings (`DOCUMENT_CHUNK_SIZE=400`, `DOCUMENT_CHUNK_OVERLAP=50` by default): starting guesses to tune on real runbooks
+- Document content is limited to 100,000 characters, because chunking and embedding happen while the request is open
 
 ---
 
 ### 🌱 Test Data and Search Evaluation
 
-- `python -m app.scripts.seed_incidents` loads **100 synthetic incidents** (10 scenarios × 10 differently worded incidents) into **PostgreSQL and Qdrant**
+- `python -m app.scripts.seed_incidents` loads **100 synthetic incidents** (10 scenarios × 10 differently worded incidents) and **10 runbooks** (one per scenario) into **PostgreSQL and Qdrant**
   - fixed ids and a `seed` tag, so repeating it never duplicates and `--clean` removes only the seeded incidents
 - `python -m app.scripts.evaluate_search` asks 20 questions with known answers and reports whether the **first result** and the **top 5** come from the right scenario
 - Example run on the seeded data: the first result was from the right scenario for 18 of 20 questions (90%). Treat this as a baseline for comparing future changes (hybrid search, reranking), not as a real-world accuracy number: the data is synthetic and small.
+
+---
+
+### 🖥 Simple Web UI
+
+One static page served by FastAPI at **`/ui/`** (no build step, and no CORS because it is the same origin).
+
+- Two tabs: **Incidents** and **Runbooks and docs**
+- A search box ranked by meaning, or leave it empty to **browse** newest first with paging
+- Filters: service, severity and status (incidents), type (documents), results per page, minimum score
+- A results table with a **match score**; documents show the **matching passage**
+- Click a row for full details (for documents, the matched passage is highlighted inside the full text)
+- Clear messages for no results, invalid input (422), and "search unavailable" (503)
+- Data is always rendered as text, never parsed as HTML, and the page loads nothing from other sites
+- React comes later (Phase 6); this page only talks to the JSON API, so it can be replaced
 
 ---
 
@@ -244,14 +263,6 @@ search → best chunks → keep the best chunk per document → load documents f
 ---
 
 ## 🔮 Planned
-
-### 🔌 Document API Wiring
-
-- Index documents on `POST /documents` (best effort), `GET /search/documents`, and documents in the reindex script
-
-### 🖥 Simple UI
-
-- A single page served by FastAPI: search box, filters, and a results table with match scores. React comes later (Phase 6).
 
 ### 🔀 Better Retrieval
 
@@ -305,7 +316,7 @@ search → best chunks → keep the best chunk per document → load documents f
             │                    payload)     truth)
             └── on incident create: embed + upsert ──┘
 
-   Service layer only (not exposed by the API yet):
+   Documents follow the same pattern:
    chunker → DocumentIndexer → Qdrant "document_chunks" → DocumentSearchService
 ```
 
@@ -387,11 +398,14 @@ enterprise-rag/
 │   │      document_search_service.py
 │   │      reindex.py
 │   │
-│   └── scripts/
-│          reindex.py
-│          seed_data.py
-│          seed_incidents.py
-│          evaluate_search.py
+│   ├── scripts/
+│   │      reindex.py
+│   │      seed_data.py
+│   │      seed_incidents.py
+│   │      evaluate_search.py
+│   │
+│   └── static/
+│          index.html
 │
 ├── docs/
 │      opsmind-overview.html
@@ -447,7 +461,7 @@ Load incidents from PostgreSQL by id
 200 [{incident, score}, ...]      (503 if Ollama or Qdrant is unavailable)
 ```
 
-## Index and Search a Document *(service layer)*
+## Index and Search a Document
 
 ```text
 DocumentIndexer.index(document)
@@ -543,7 +557,7 @@ A seeded dataset with known answers and an evaluation script turn "it looks righ
 | Orchestration | LangGraph *(planned)* |
 | Testing | Pytest, FastAPI TestClient |
 | Containers | Docker Compose (Qdrant today, full stack *planned*) |
-| Frontend | A simple served page first, React later *(planned)* |
+| Frontend | A single static page served by FastAPI (React later, *planned*) |
 
 ---
 
@@ -600,11 +614,11 @@ alembic upgrade head
 python -m uvicorn main:app --reload
 ```
 
-If port 8000 is already taken, add `--port 8001`. Open `/docs` for the interactive API documentation.
+If port 8000 is already taken, add `--port 8001`. Open `/ui/` for the search page and `/docs` for the interactive API documentation.
 
 ## 7. Add test data (optional but recommended)
 
-Load 100 synthetic incidents into PostgreSQL and Qdrant, then measure search quality:
+Load 100 synthetic incidents and 10 runbooks into PostgreSQL and Qdrant, then measure incident search quality:
 
 ```bash
 python -m app.scripts.seed_incidents
@@ -643,13 +657,13 @@ python -m pytest
 | Phase | Focus | Status |
 |---|---|---|
 | 1 | Knowledge foundation: incident models, ingestion, APIs | ✅ Complete |
-| 2 | RAG engine: embeddings, Qdrant retrieval, grounded answers | 🚧 In progress (incident search and document chunking done; API wiring and answers pending) |
+| 2 | RAG engine: embeddings, Qdrant retrieval, grounded answers | 🚧 In progress (incident and document search plus a web UI done; hybrid search, reranking and answers pending) |
 | 3 | Investigation: multi-source reasoning, LangGraph | ⏳ Planned |
 | 4 | Security: authentication, RBAC, document permissions | ⏳ Planned |
 | 5 | Production: evaluation, observability, reliability | ⏳ Planned |
 | 6 | Application: React frontend and deployment | ⏳ Planned |
 
-**Next up:** a simple UI for search, wiring document indexing and search into the API, then hybrid search, reranking, and grounded answers with citations.
+**Next up:** hybrid search and reranking (measured with the evaluation script), then grounded answers with citations.
 
 ---
 
@@ -698,10 +712,9 @@ After completing this project, you will understand:
 At this stage the project intentionally does **not** include:
 
 - LLM answer generation or citations
-- Document indexing and search through the API (the service layer exists)
 - Hybrid search or reranking
 - Authentication or authorization
-- A frontend
+- A production frontend (a simple search page exists; React comes later)
 - A full Docker Compose deployment (only Qdrant is containerized)
 
 The purpose of the current stage is specifically:

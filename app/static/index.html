@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpsMind Search</title>
+<style>
+  :root {
+    --bg:#f5f7fa; --card:#fff; --ink:#16202a; --muted:#5a6b7b; --line:#dde4ea; --accent:#0f766e; --accent-soft:#d6efeb;
+    --code:#eef2f6; --warn:#92400e; --warn-bg:#fdecc8; --bad:#b91c1c; --bad-bg:#fde2e2; --hl:#fff3b0;
+    --s1:#b91c1c; --s2:#c2410c; --s3:#a16207; --s4:#4b5563;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:#0e151d; --card:#161f2a; --ink:#e8eef4; --muted:#9db0c1; --line:#2a3745; --accent:#2dd4bf; --accent-soft:#10312e;
+      --code:#1d2835; --warn:#f0a24b; --warn-bg:#43290d; --bad:#f87171; --bad-bg:#431515; --hl:#5a4a00;
+      --s1:#f87171; --s2:#fb923c; --s3:#facc15; --s4:#9ca3af;
+    }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+  .wrap { max-width:1100px; margin:0 auto; padding:20px 16px 60px; }
+  h1 { font-size:1.4rem; margin:0; }
+  .sub { color:var(--muted); margin:2px 0 16px; }
+  .tabs { display:flex; gap:6px; margin-bottom:12px; }
+  .tab { cursor:pointer; border:1px solid var(--line); background:var(--card); color:var(--ink); padding:7px 18px; border-radius:9px; font:inherit; font-weight:600; }
+  .tab[aria-selected="true"] { background:var(--accent); color:#fff; border-color:var(--accent); }
+  @media (prefers-color-scheme: dark) { .tab[aria-selected="true"] { color:#062b27; } }
+  form { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; }
+  .searchrow { display:flex; gap:8px; }
+  input, select, button { font:inherit; color:var(--ink); }
+  input[type=search], input[type=text], input[type=number], select { background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:8px 10px; }
+  input:focus, select:focus, button:focus-visible, .tab:focus-visible, tr:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+  #q { flex:1; min-width:0; font-size:1rem; }
+  .go { cursor:pointer; background:var(--accent); color:#fff; border:0; border-radius:8px; padding:8px 20px; font-weight:600; }
+  @media (prefers-color-scheme: dark) { .go { color:#062b27; } }
+  .filters { display:flex; flex-wrap:wrap; gap:10px; margin-top:10px; align-items:end; }
+  .filters label { display:flex; flex-direction:column; font-size:.78rem; color:var(--muted); gap:3px; }
+  .filters input, .filters select { min-width:130px; }
+  .hidden { display:none !important; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; align-items:center; font-size:.85rem; color:var(--muted); }
+  .chip { cursor:pointer; border:1px solid var(--line); background:var(--bg); border-radius:999px; padding:3px 11px; font-size:.82rem; }
+  .chip:hover { border-color:var(--accent); color:var(--accent); }
+  #status { margin:14px 2px 8px; color:var(--muted); min-height:1.4em; }
+  #status.error { color:var(--bad); background:var(--bad-bg); padding:8px 12px; border-radius:8px; }
+  .tablewrap { background:var(--card); border:1px solid var(--line); border-radius:12px; overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:.92rem; }
+  th, td { text-align:left; padding:9px 12px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { font-size:.75rem; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); background:var(--card); position:sticky; top:0; }
+  tbody tr { cursor:pointer; }
+  tbody tr:hover { background:var(--accent-soft); }
+  tbody tr:last-child td { border-bottom:0; }
+  .title { font-weight:600; }
+  .passage { color:var(--muted); font-size:.86rem; margin-top:3px; max-width:520px; }
+  .badge { display:inline-block; font-size:.72rem; font-weight:700; padding:1px 8px; border-radius:999px; border:1px solid currentColor; white-space:nowrap; }
+  .sev-SEV1 { color:var(--s1); } .sev-SEV2 { color:var(--s2); } .sev-SEV3 { color:var(--s3); } .sev-SEV4 { color:var(--s4); }
+  .st-open { color:var(--bad); } .st-mitigated { color:var(--warn); } .st-resolved { color:var(--accent); }
+  .score { display:flex; align-items:center; gap:6px; white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .bar { width:54px; height:6px; background:var(--line); border-radius:3px; overflow:hidden; }
+  .bar i { display:block; height:100%; background:var(--accent); }
+  .muted { color:var(--muted); }
+  .pager { display:flex; gap:8px; align-items:center; margin-top:12px; color:var(--muted); }
+  .pager button { cursor:pointer; background:var(--card); border:1px solid var(--line); border-radius:8px; padding:6px 14px; }
+  .pager button:disabled { opacity:.4; cursor:default; }
+  /* detail panel */
+  #detail { position:fixed; top:0; right:0; bottom:0; width:min(520px,100%); background:var(--card); border-left:1px solid var(--line); box-shadow:-8px 0 30px rgba(0,0,0,.15); padding:18px 20px; overflow-y:auto; transform:translateX(105%); transition:transform .18s; z-index:20; }
+  #detail.open { transform:none; }
+  #detail h2 { font-size:1.1rem; margin:0 30px 8px 0; }
+  #detail .close { position:absolute; top:12px; right:14px; cursor:pointer; background:none; border:0; font-size:1.5rem; color:var(--muted); }
+  dl { margin:12px 0 0; display:grid; grid-template-columns:110px 1fr; gap:8px 12px; }
+  dt { color:var(--muted); font-size:.82rem; }
+  dd { margin:0; word-break:break-word; }
+  .block { white-space:pre-wrap; background:var(--code); border-radius:8px; padding:10px 12px; font-size:.9rem; margin-top:4px; }
+  mark { background:var(--hl); color:inherit; padding:0 2px; border-radius:3px; }
+  .tags span { display:inline-block; background:var(--code); border-radius:6px; padding:1px 8px; margin:0 4px 4px 0; font-size:.8rem; }
+  footer { margin-top:26px; color:var(--muted); font-size:.82rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>OpsMind Search</h1>
+  <p class="sub">Describe a problem in plain words. Results are ranked by meaning, not by exact keywords. Leave the box empty to browse.</p>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" id="tab-incidents" aria-selected="true">Incidents</button>
+    <button class="tab" role="tab" id="tab-documents" aria-selected="false">Runbooks and docs</button>
+  </div>
+
+  <form id="form" autocomplete="off">
+    <div class="searchrow">
+      <input id="q" type="search" placeholder="e.g. payments failing after the deploy" aria-label="Search">
+      <button class="go" type="submit">Search</button>
+    </div>
+    <div class="filters">
+      <label>Service <input id="f-service" type="text" placeholder="any"></label>
+      <label class="for-incidents">Severity
+        <select id="f-severity"><option value="">any</option><option>SEV1</option><option>SEV2</option><option>SEV3</option><option>SEV4</option></select></label>
+      <label class="for-incidents">Status
+        <select id="f-status"><option value="">any</option><option>open</option><option>mitigated</option><option>resolved</option></select></label>
+      <label class="for-documents hidden">Type
+        <select id="f-doctype"><option value="">any</option><option value="runbook">runbook</option><option value="troubleshooting_guide">troubleshooting guide</option><option value="technical_doc">technical doc</option></select></label>
+      <label>Results
+        <select id="f-limit"><option>5</option><option selected>10</option><option>20</option><option>50</option></select></label>
+      <label class="only-search">Min score
+        <input id="f-minscore" type="number" step="0.05" min="-1" max="1" placeholder="none"></label>
+    </div>
+    <div class="chips" id="examples"><span>Try:</span></div>
+  </form>
+
+  <div id="status" role="status" aria-live="polite"></div>
+  <div class="tablewrap"><table id="table"><thead></thead><tbody></tbody></table></div>
+  <div class="pager hidden" id="pager">
+    <button id="prev" type="button">← Previous</button>
+    <span id="pageinfo"></span>
+    <button id="next" type="button">Next →</button>
+  </div>
+  <footer>Match score: cosine similarity between your question and the incident or passage (closer to 1 = more similar). Data comes from PostgreSQL; ranking comes from Qdrant.</footer>
+</div>
+
+<aside id="detail" aria-label="Details" aria-hidden="true"></aside>
+
+<script>
+(function () {
+  "use strict";
+  var state = { tab: "incidents", offset: 0, lastCount: 0, mode: "browse", seq: 0 };
+  var $ = function (id) { return document.getElementById(id); };
+  var EXAMPLES = {
+    incidents: ["payments failing after deploy", "disk is full", "certificate expired", "redis is slow", "memory leak", "services cannot resolve hostnames"],
+    documents: ["what to do when connections to the database run out", "clear the cache after an outage", "disk is full, rotate the logs", "roll back a bad release", "certificate expired"]
+  };
+
+  /* ---------- tiny DOM helper: data is always set as text, never parsed as HTML ---------- */
+  function el(tag, attrs, children) {
+    var e = document.createElement(tag);
+    Object.keys(attrs || {}).forEach(function (k) {
+      if (k === "text") e.textContent = attrs[k];
+      else if (k === "class") e.className = attrs[k];
+      else e.setAttribute(k, attrs[k]);
+    });
+    (children || []).forEach(function (c) { if (c) e.appendChild(typeof c === "string" ? document.createTextNode(c) : c); });
+    return e;
+  }
+  function badge(text, cls) { return el("span", { class: "badge " + cls, text: text }); }
+  function when(iso) { return iso ? iso.slice(0, 16).replace("T", " ") + " UTC" : ""; }
+  function truncate(s, n) { return s.length > n ? s.slice(0, n - 1).trimEnd() + "…" : s; }
+  function scoreCell(score) {
+    var pct = Math.max(0, Math.min(1, score)) * 100;
+    var bar = el("span", { class: "bar" }, [el("i", { style: "width:" + pct.toFixed(0) + "%" })]);
+    return el("span", { class: "score" }, [bar, el("span", { text: score.toFixed(3) })]);
+  }
+
+  /* ---------- column definitions ---------- */
+  var COLUMNS = {
+    "incidents:search": ["Score", "Incident", "Service", "Severity", "Status", "Reported"],
+    "incidents:browse": ["Incident", "Service", "Severity", "Status", "Reported"],
+    "documents:search": ["Score", "Document and matching passage", "Type", "Service"],
+    "documents:browse": ["Document", "Type", "Service", "Source", "Created"]
+  };
+  function incidentCells(i) {
+    return [el("td", {}, [el("div", { class: "title", text: i.title })]), el("td", { text: i.service }),
+      el("td", {}, [badge(i.severity, "sev-" + i.severity)]), el("td", {}, [badge(i.status, "st-" + i.status)]),
+      el("td", { class: "muted", text: when(i.reported_at) })];
+  }
+  function docTypeLabel(t) { return t.replace(/_/g, " "); }
+
+  function rowsFor(items) {
+    var key = state.tab + ":" + state.mode;
+    return items.map(function (it) {
+      var cells, record = it;
+      if (key === "incidents:search") {
+        record = it.incident;
+        cells = [el("td", {}, [scoreCell(it.score)])].concat(incidentCells(it.incident));
+      } else if (key === "incidents:browse") {
+        cells = incidentCells(it);
+      } else if (key === "documents:search") {
+        record = it.document;
+        cells = [el("td", {}, [scoreCell(it.score)]),
+          el("td", {}, [el("div", { class: "title", text: it.document.title }), el("div", { class: "passage", text: truncate(it.chunk_text, 220) })]),
+          el("td", { text: docTypeLabel(it.document.doc_type) }), el("td", { text: it.document.service || "all services" })];
+      } else {
+        cells = [el("td", {}, [el("div", { class: "title", text: it.title })]), el("td", { text: docTypeLabel(it.doc_type) }),
+          el("td", { text: it.service || "all services" }), el("td", { class: "muted", text: it.source || "" }),
+          el("td", { class: "muted", text: when(it.created_at) })];
+      }
+      var tr = el("tr", { tabindex: "0", role: "button", "aria-label": "Open details" }, cells);
+      var open = function () { showDetail(record, it); };
+      tr.addEventListener("click", open);
+      tr.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
+      return tr;
+    });
+  }
+
+  function renderTable(items) {
+    var key = state.tab + ":" + state.mode;
+    var thead = $("table").tHead, tbody = $("table").tBodies[0];
+    thead.textContent = ""; tbody.textContent = "";
+    thead.appendChild(el("tr", {}, COLUMNS[key].map(function (c) { return el("th", { text: c }); })));
+    rowsFor(items).forEach(function (r) { tbody.appendChild(r); });
+  }
+
+  /* ---------- detail panel ---------- */
+  function row(label, value) { return [el("dt", { text: label }), el("dd", {}, [typeof value === "string" ? document.createTextNode(value) : value])]; }
+  function block(text) { return el("div", { class: "block", text: text }); }
+  function tagList(tags) { return el("div", { class: "tags" }, (tags || []).map(function (t) { return el("span", { text: t }); })); }
+
+  function highlightedContent(content, passage) {
+    // The matched passage is a slice of the content (whitespace may differ), so try an exact find first.
+    var box = el("div", { class: "block" });
+    var idx = passage ? content.indexOf(passage) : -1;
+    if (idx < 0) { box.textContent = content; return box; }
+    box.appendChild(document.createTextNode(content.slice(0, idx)));
+    box.appendChild(el("mark", { text: passage }));
+    box.appendChild(document.createTextNode(content.slice(idx + passage.length)));
+    return box;
+  }
+
+  function showDetail(record, hit) {
+    var d = $("detail"), list = el("dl");
+    var add = function (pair) { pair.forEach(function (n) { list.appendChild(n); }); };
+    d.textContent = "";
+    var close = el("button", { class: "close", "aria-label": "Close details", text: "×" });
+    close.addEventListener("click", closeDetail);
+    d.appendChild(close);
+    d.appendChild(el("h2", { text: record.title }));
+    if (state.tab === "incidents") {
+      add(row("Service", record.service));
+      add(row("Severity", badge(record.severity, "sev-" + record.severity)));
+      add(row("Status", badge(record.status, "st-" + record.status)));
+      add(row("Reported", when(record.reported_at)));
+      if (record.resolved_at) add(row("Resolved", when(record.resolved_at)));
+      add(row("Description", block(record.description)));
+      if (record.root_cause) add(row("Root cause", block(record.root_cause)));
+      if (record.resolution) add(row("Resolution", block(record.resolution)));
+      add(row("Tags", tagList(record.tags)));
+      add(row("Id", record.id));
+      if (hit && hit.score !== undefined) add(row("Match score", hit.score.toFixed(3)));
+    } else {
+      add(row("Type", docTypeLabel(record.doc_type)));
+      add(row("Service", record.service || "all services"));
+      if (record.source) add(row("Source", record.source));
+      add(row("Created", when(record.created_at)));
+      add(row("Tags", tagList(record.tags)));
+      if (hit && hit.chunk_text !== undefined) {
+        add(row("Match score", hit.score.toFixed(3)));
+        add(row("Matched passage", highlightedContent(record.content, hit.chunk_text)));
+      } else {
+        add(row("Content", block(record.content)));
+      }
+      add(row("Id", record.id));
+    }
+    d.appendChild(list);
+    d.classList.add("open"); d.setAttribute("aria-hidden", "false");
+    close.focus();
+  }
+  function closeDetail() { var d = $("detail"); d.classList.remove("open"); d.setAttribute("aria-hidden", "true"); }
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeDetail(); });
+
+  /* ---------- requests ---------- */
+  function setStatus(text, isError) { var s = $("status"); s.textContent = text; s.className = isError ? "error" : ""; }
+
+  function buildRequest() {
+    var q = $("q").value.trim(), p = new URLSearchParams();
+    var service = $("f-service").value.trim(), limit = $("f-limit").value;
+    state.mode = q ? "search" : "browse";
+    if (service) p.set("service", service);
+    p.set("limit", limit);
+    if (state.tab === "incidents") {
+      if ($("f-severity").value) p.set("severity", $("f-severity").value);
+      if ($("f-status").value) p.set("status", $("f-status").value);
+    } else if ($("f-doctype").value) {
+      p.set("doc_type", $("f-doctype").value);
+    }
+    if (q) {
+      p.set("q", q);
+      if ($("f-minscore").value !== "") p.set("min_score", $("f-minscore").value);
+      return "/search/" + state.tab + "?" + p.toString();
+    }
+    p.set("offset", state.offset);
+    return "/" + state.tab + "?" + p.toString();
+  }
+
+  function errorText(status, body) {
+    if (status === 503) return "Search is temporarily unavailable: the embedding model (Ollama) or the vector database (Qdrant) cannot be reached. Browsing without a query still works.";
+    if (status === 422) {
+      var detail = body && body.detail;
+      if (Array.isArray(detail) && detail.length) return "Check the inputs: " + detail.map(function (d) { return (d.loc || []).slice(-1) + " " + d.msg; }).join("; ");
+      return "Check the inputs" + (typeof detail === "string" ? ": " + detail : ".");
+    }
+    return "Something went wrong (HTTP " + status + ").";
+  }
+
+  function run(resetOffset) {
+    if (resetOffset) state.offset = 0;
+    var url = buildRequest(), seq = ++state.seq;
+    setStatus("Loading…", false);
+    fetch(url, { headers: { Accept: "application/json" } })
+      .then(function (r) { return r.json().catch(function () { return null; }).then(function (b) { return { ok: r.ok, status: r.status, body: b }; }); })
+      .then(function (res) {
+        if (seq !== state.seq) return; // a newer request replaced this one
+        if (!res.ok) { renderTable([]); $("pager").classList.add("hidden"); setStatus(errorText(res.status, res.body), true); return; }
+        var items = res.body || [];
+        state.lastCount = items.length;
+        renderTable(items);
+        var noun = state.tab === "incidents" ? "incident" : "document";
+        if (!items.length) {
+          setStatus(state.mode === "search" ? "No matches. Try different words, fewer filters, or clear the minimum score." : "Nothing here yet.", false);
+        } else if (state.mode === "search") {
+          var note = (state.tab === "documents" && $("f-service").value.trim())
+            ? " Documents with no service apply to every service, so they are always included." : "";
+          setStatus(items.length + " " + noun + (items.length === 1 ? "" : "s") + " ranked by meaning. Click a row for details." + note, false);
+        } else {
+          setStatus("Browsing " + noun + "s, newest first. Click a row for details.", false);
+        }
+        var pager = $("pager");
+        pager.classList.toggle("hidden", state.mode !== "browse");
+        $("prev").disabled = state.offset === 0;
+        $("next").disabled = items.length < parseInt($("f-limit").value, 10);
+        $("pageinfo").textContent = items.length ? "Showing " + (state.offset + 1) + "–" + (state.offset + items.length) : "";
+      })
+      .catch(function () {
+        if (seq !== state.seq) return;
+        renderTable([]); $("pager").classList.add("hidden");
+        setStatus("Cannot reach the server. Is the API running?", true);
+      });
+  }
+
+  /* ---------- wiring ---------- */
+  function setTab(tab) {
+    state.tab = tab; state.offset = 0; closeDetail();
+    ["incidents", "documents"].forEach(function (t) { $("tab-" + t).setAttribute("aria-selected", t === tab ? "true" : "false"); });
+    document.querySelectorAll(".for-incidents").forEach(function (n) { n.classList.toggle("hidden", tab !== "incidents"); });
+    document.querySelectorAll(".for-documents").forEach(function (n) { n.classList.toggle("hidden", tab !== "documents"); });
+    $("q").placeholder = tab === "incidents" ? "e.g. payments failing after the deploy" : "e.g. what to do when the disk is full";
+    var chips = $("examples"); chips.textContent = ""; chips.appendChild(el("span", { text: "Try:" }));
+    EXAMPLES[tab].forEach(function (text) {
+      var c = el("button", { class: "chip", type: "button", text: text });
+      c.addEventListener("click", function () { $("q").value = text; run(true); });
+      chips.appendChild(c);
+    });
+    run(true);
+  }
+  $("tab-incidents").addEventListener("click", function () { setTab("incidents"); });
+  $("tab-documents").addEventListener("click", function () { setTab("documents"); });
+  $("form").addEventListener("submit", function (e) { e.preventDefault(); run(true); });
+  ["f-severity", "f-status", "f-doctype", "f-limit"].forEach(function (id) { $(id).addEventListener("change", function () { run(true); }); });
+  ["f-service", "f-minscore"].forEach(function (id) { $(id).addEventListener("change", function () { run(true); }); });
+  $("prev").addEventListener("click", function () { state.offset = Math.max(0, state.offset - parseInt($("f-limit").value, 10)); run(false); });
+  $("next").addEventListener("click", function () { state.offset += parseInt($("f-limit").value, 10); run(false); });
+
+  setTab("incidents");
+})();
+</script>
+</body>
+</html>

@@ -4,7 +4,7 @@ import uuid
 import pytest
 from fastapi.testclient import TestClient
 
-from app.api.deps import get_session
+from app.api.deps import get_document_indexer, get_session
 from main import app
 
 VALID_BODY = {
@@ -18,11 +18,35 @@ VALID_BODY = {
 
 
 @pytest.fixture
-def client(session):
-    # Reuse the rollback session so API tests never commit into the real DB.
+def client(session, indexer):
+    # Reuse the rollback session so API tests never commit into the real DB,
+    # and a recording indexer so they never touch Ollama or the real Qdrant collection.
     app.dependency_overrides[get_session] = lambda: session
+    app.dependency_overrides[get_document_indexer] = lambda: indexer
     yield TestClient(app)
     app.dependency_overrides.clear()
+
+
+def test_post_indexes_the_created_document(client, indexer):
+    created = _post(client)
+    assert [str(d.id) for d in indexer.indexed] == [created["id"]]
+
+
+def test_post_still_succeeds_when_indexing_fails(client, indexer):
+    indexer.fail = True
+    created = _post(client)
+    # The document is saved in Postgres even though indexing failed.
+    assert client.get(f"/documents/{created['id']}").status_code == 200
+
+
+def test_invalid_post_is_not_indexed(client, indexer):
+    assert client.post("/documents", json={**VALID_BODY, "title": ""}).status_code == 422
+    assert indexer.indexed == []
+
+
+def test_content_over_the_limit_is_rejected_and_at_the_limit_accepted(client, indexer):
+    assert client.post("/documents", json={**VALID_BODY, "content": "x" * 100_001}).status_code == 422
+    assert client.post("/documents", json={**VALID_BODY, "content": "x" * 100_000}).status_code == 201
 
 
 def _post(client, **overrides):

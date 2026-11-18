@@ -4,7 +4,7 @@ import uuid
 
 from pydantic import AwareDatetime, BaseModel, Field, field_validator
 
-from app.api.dto.limits import SERVICE_MAX, SOURCE_MAX, TITLE_MAX
+from app.api.dto.limits import CONTENT_MAX, SERVICE_MAX, SOURCE_MAX, TITLE_MAX
 
 
 class DocumentType(str, enum.Enum):
@@ -20,7 +20,7 @@ class DocumentBase(BaseModel):
     doc_type: DocumentType
     # None = applies to every service
     service: str | None = Field(default=None, min_length=1, max_length=SERVICE_MAX)
-    content: str = Field(min_length=1)
+    content: str = Field(min_length=1, max_length=CONTENT_MAX)
     # file name or URL the content came from
     source: str | None = Field(default=None, max_length=SOURCE_MAX)
     tags: list[str] = Field(default_factory=list)

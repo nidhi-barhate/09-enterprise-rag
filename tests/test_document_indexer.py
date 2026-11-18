@@ -178,3 +178,14 @@ def test_embedding_failure_leaves_existing_chunks_untouched(client, collection):
         broken.index(document.model_copy(update={"content": "completely new text"}))
     after = [p.payload["text"] for p in chunks_of(client, collection, document.id)]
     assert after == before
+
+
+def test_app_indexer_takes_chunk_size_and_overlap_from_settings(monkeypatch, client):
+    from app.config.settings import settings
+    from app.services.document_indexer import create_document_indexer
+
+    monkeypatch.setattr(settings, "document_chunk_size", 123)
+    monkeypatch.setattr(settings, "document_chunk_overlap", 7)
+    indexer = create_document_indexer(client, RecordingEmbedder())
+    assert indexer._chunk_size == 123
+    assert indexer._overlap == 7

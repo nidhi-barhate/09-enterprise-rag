@@ -165,3 +165,47 @@ def test_half_right_search_is_reported_as_half():
 def test_every_question_points_at_a_real_scenario():
     assert {e for _, e in QUESTIONS} <= set(scenario_keys())
     assert len(QUESTIONS) >= 20
+
+
+# --- seed runbooks ---
+
+from app.api.dto.document import DocumentType  # noqa: E402
+from app.repository.document_repository import DocumentRepository  # noqa: E402
+from app.scripts.seed_data import build_seed_documents  # noqa: E402
+from app.scripts.seed_incidents import clean_documents, seed_documents  # noqa: E402
+from app.services.chunker import chunk_text  # noqa: E402
+
+
+def test_one_runbook_per_scenario_with_stable_ids():
+    documents = build_seed_documents()
+    assert len(documents) == 10
+    assert {scenario_of(d.tags) for d in documents} == set(scenario_keys())
+    assert len({d.id for d in documents}) == 10
+    assert [d.id for d in documents] == [d.id for d in build_seed_documents()]
+
+
+def test_runbooks_are_varied_and_long_enough_to_be_chunked():
+    documents = build_seed_documents()
+    assert {d.doc_type for d in documents} == set(DocumentType)
+    assert any(d.service is None for d in documents)  # global documents exist
+    assert any(d.service is not None for d in documents)
+    for document in documents:
+        assert SEED_TAG in document.tags
+        assert len(chunk_text(document.content, 400, 50)) >= 2
+
+
+def test_seed_documents_saves_and_indexes_and_is_repeatable(session):
+    repo, indexer = DocumentRepository(session), FakeIndexer()
+    assert seed_documents(repo, indexer) == 10
+    seed_documents(repo, indexer)
+    ids = [d.id for d in build_seed_documents()]
+    assert len(repo.get_many(ids)) == 10
+    assert len(set(indexer.indexed)) == 10
+
+
+def test_clean_documents_removes_only_seeded_documents(session):
+    repo, indexer = DocumentRepository(session), FakeIndexer()
+    seed_documents(repo, indexer)
+    assert clean_documents(repo, indexer) == 10
+    assert repo.get_many([d.id for d in build_seed_documents()]) == {}
+    assert len(set(indexer.deleted)) == 10

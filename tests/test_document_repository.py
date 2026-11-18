@@ -86,3 +86,18 @@ def test_get_many_returns_found_documents_keyed_by_id(session):
 
 def test_get_many_with_no_ids_returns_empty_dict(session):
     assert DocumentRepository(session).get_many([]) == {}
+
+
+# --- delete ---
+
+
+def test_delete_removes_document_and_reports_it(session):
+    repo = DocumentRepository(session)
+    document = make_document()
+    repo.add(document)
+    assert repo.delete(document.id) is True
+    assert repo.get(document.id) is None
+
+
+def test_delete_unknown_id_returns_false(session):
+    assert DocumentRepository(session).delete(uuid.uuid4()) is False
