@@ -478,9 +478,29 @@ embed question → Qdrant (document_chunks) → best chunk per document → docu
 ## Seed and Evaluate
 
 ```text
-python -m app.scripts.seed_incidents      100 incidents → PostgreSQL + Qdrant
+python -m app.scripts.seed_incidents      100 incidents + 10 runbooks → PostgreSQL + Qdrant
 python -m app.scripts.evaluate_search     20 questions → first result / top-5 correctness
 python -m app.scripts.seed_incidents --clean
+```
+
+## Use the Web Page
+
+```text
+Open /ui/  (static page served by FastAPI, same origin as the API)
+      │
+      ├── search box empty → browse mode: GET /incidents or /documents (PostgreSQL only)
+      │                       works even if Ollama or Qdrant is down
+      │
+      └── question typed  → search mode: GET /search/incidents or /search/documents
+                             embed → Qdrant (+ filters) → full records from PostgreSQL
+      │
+      ▼
+Table with match scores (runbooks also show the matching passage)
+      │
+      ▼
+Click a row → details panel from data already in the page (no new request)
+
+503 → "Search is temporarily unavailable"      422 → message naming the invalid field
 ```
 
 ---

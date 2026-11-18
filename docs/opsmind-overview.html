@@ -579,6 +579,33 @@ var FLOWS = [
         text: "<code>python -m app.scripts.seed_incidents --clean</code> removes only the 100 seeded incidents from both PostgreSQL and Qdrant. Your own incidents stay.",
         files: ["scripts/seed_incidents.py"] }
     ]
+  },
+  {
+    id: "ui", label: "Use the web page (/ui)",
+    labels: { client: ["Browser", "the /ui/ page"], api: ["FastAPI", "static page + JSON API"] },
+    steps: [
+      { title: "Open the page", nodes: ["client", "api"], arrows: ["a-client"],
+        text: "You open <code>/ui/</code> (the root <code>/</code> redirects there). FastAPI sends one static file: HTML, CSS and plain JavaScript. There is no build step, and no CORS setup, because the page and the API share one address.",
+        files: ["main.py", "static/index.html"] },
+      { title: "It shows the newest incidents", nodes: ["client", "api", "pg"], arrows: ["a-client", "a-pg"],
+        text: "With the search box empty, the page is in <b>browse mode</b>: it calls <code>GET /incidents?limit=10&amp;offset=0</code>. This reads PostgreSQL only, so it keeps working even if Ollama or Qdrant is down. Previous and Next change the offset.",
+        files: ["api/routes/incidents.py", "repository/incident_repository.py"] },
+      { title: "You type a question and press Search", nodes: ["client", "api"], arrows: ["a-client"],
+        text: "The page switches to <b>search mode</b> and calls <code>GET /search/incidents?q=…</code> with your filters (service, severity, status, results, minimum score). On the Runbooks tab it calls <code>/search/documents</code> instead.",
+        files: ["static/index.html", "api/routes/search.py"] },
+      { title: "The API finds the closest items", nodes: ["api", "ol", "qd", "pg"], arrows: ["a-ol", "a-qd", "a-pg"],
+        text: "The same path as before: Ollama turns the question into numbers, Qdrant finds the nearest incidents or document chunks (applying the filters), and PostgreSQL supplies the full records.",
+        files: ["services/incident_search_service.py", "services/document_search_service.py"] },
+      { title: "A table with match scores", nodes: ["client", "api"], arrows: ["a-client"],
+        text: "The page draws the table with a score bar for each row. For runbooks it also shows the <b>matching passage</b>. Everything from the server is written into the page as plain text, never parsed as HTML.",
+        files: ["static/index.html"] },
+      { title: "Click a row for details", nodes: ["client"], arrows: [],
+        text: "The details panel opens using the data that is already in the page, so there is no new request. For runbooks, the matched passage is highlighted inside the full text.",
+        files: ["static/index.html"] },
+      { title: "When something is down", nodes: ["client", "api"], arrows: ["a-client"],
+        text: "If Ollama or Qdrant cannot be reached, the API answers <b>503</b> and the page shows &quot;Search is temporarily unavailable&quot; instead of an error. Invalid input (for example a minimum score of 5) gets a <b>422</b> and a message saying which field is wrong.",
+        files: ["api/routes/search.py", "static/index.html"] }
+    ]
   }
 ];
 
