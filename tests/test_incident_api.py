@@ -139,3 +139,23 @@ def test_list_limit_and_offset(client):
 )
 def test_list_invalid_params_return_422(client, params):
     assert client.get("/incidents", params=params).status_code == 422
+
+
+# --- length limits: over-long values must be a 422, never a database 500 ---
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"title": "x" * 256},
+        {"service": "s" * 101},
+        {"service": ""},
+    ],
+)
+def test_post_over_limit_values_return_422(client, overrides):
+    assert client.post("/incidents", json={**VALID_BODY, **overrides}).status_code == 422
+
+
+def test_post_values_at_the_limit_are_accepted(client):
+    body = {**VALID_BODY, "title": "x" * 255, "service": "s" * 100}
+    assert client.post("/incidents", json=body).status_code == 201

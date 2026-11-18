@@ -6,6 +6,7 @@ from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.api.dto.incident import IncidentStatus, Severity
+from app.api.dto.limits import SERVICE_MAX, TITLE_MAX
 from app.model.base import Base
 
 
@@ -20,11 +21,11 @@ class IncidentRecord(Base):
 
     # App-generated UUID (the Pydantic model requires id), so no default here.
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
-    title: Mapped[str] = mapped_column(String(255))
+    title: Mapped[str] = mapped_column(String(TITLE_MAX))
     description: Mapped[str] = mapped_column(Text)
     severity: Mapped[str] = mapped_column(String(10))
     status: Mapped[str] = mapped_column(String(20))
-    service: Mapped[str] = mapped_column(String(100))
+    service: Mapped[str] = mapped_column(String(SERVICE_MAX))
     reported_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True))
     resolved_at: Mapped[datetime.datetime | None] = mapped_column(DateTime(timezone=True))
     root_cause: Mapped[str | None] = mapped_column(Text)

@@ -5,6 +5,8 @@ import uuid
 
 from pydantic import AwareDatetime, BaseModel, Field, field_validator, model_validator
 
+from app.api.dto.limits import SERVICE_MAX, TITLE_MAX
+
 
 class Severity(str, enum.Enum):
     SEV1 = "SEV1"
@@ -22,11 +24,11 @@ class IncidentStatus(str, enum.Enum):
 class IncidentBase(BaseModel):
     """Fields and business rules shared by the create request and the stored incident."""
 
-    title: str = Field(min_length=1)
+    title: str = Field(min_length=1, max_length=TITLE_MAX)
     description: str
     severity: Severity
     status: IncidentStatus
-    service: str
+    service: str = Field(min_length=1, max_length=SERVICE_MAX)
     reported_at: AwareDatetime
     resolved_at: AwareDatetime | None = None
     root_cause: str | None = None
