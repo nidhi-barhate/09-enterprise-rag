@@ -3,6 +3,7 @@ from sqlalchemy import text
 
 from app.config.settings import settings
 from app.config.connection import engine
+from app.api.routes.documents import router as documents_router
 from app.api.routes.incidents import router as incidents_router
 
 
@@ -12,6 +13,7 @@ app = FastAPI(
 )
 
 app.include_router(incidents_router)
+app.include_router(documents_router)
 
 
 @app.get("/health")

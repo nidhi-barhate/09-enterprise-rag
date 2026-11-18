@@ -13,8 +13,9 @@ class DocumentType(str, enum.Enum):
     TECHNICAL_DOC = "technical_doc"
 
 
-class Document(BaseModel):
-    id: uuid.UUID
+class DocumentBase(BaseModel):
+    """Fields shared by the create request and the stored document."""
+
     title: str = Field(min_length=1, max_length=TITLE_MAX)
     doc_type: DocumentType
     # None = applies to every service
@@ -23,6 +24,14 @@ class Document(BaseModel):
     # file name or URL the content came from
     source: str | None = Field(default=None, max_length=SOURCE_MAX)
     tags: list[str] = Field(default_factory=list)
+
+
+class DocumentCreate(DocumentBase):
+    """POST body: no id or created_at, the server sets both."""
+
+
+class Document(DocumentBase):
+    id: uuid.UUID
     created_at: AwareDatetime
 
     @field_validator("created_at")
