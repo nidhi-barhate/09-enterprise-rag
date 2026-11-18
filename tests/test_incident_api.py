@@ -5,7 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.api import deps
-from app.api.deps import get_session
+from app.api.deps import get_incident_indexer, get_session
 from main import app
 
 VALID_BODY = {
@@ -20,11 +20,31 @@ VALID_BODY = {
 
 
 @pytest.fixture
-def client(session):
-    # Reuse the rollback session so API tests never commit into the real DB.
+def client(session, indexer):
+    # Reuse the rollback session so API tests never commit into the real DB,
+    # and a recording indexer so they never call Ollama or Qdrant.
     app.dependency_overrides[get_session] = lambda: session
+    app.dependency_overrides[get_incident_indexer] = lambda: indexer
     yield TestClient(app)
     app.dependency_overrides.clear()
+
+
+def test_post_indexes_the_created_incident(client, indexer):
+    created = client.post("/incidents", json=VALID_BODY).json()
+    assert [str(i.id) for i in indexer.indexed] == [created["id"]]
+
+
+def test_post_still_succeeds_when_indexing_fails(client, indexer):
+    indexer.fail = True
+    response = client.post("/incidents", json=VALID_BODY)
+    assert response.status_code == 201
+    # The incident is saved in Postgres even though indexing failed.
+    assert client.get(f"/incidents/{response.json()['id']}").status_code == 200
+
+
+def test_invalid_post_is_not_indexed(client, indexer):
+    assert client.post("/incidents", json={**VALID_BODY, "title": ""}).status_code == 422
+    assert indexer.indexed == []
 
 
 def test_post_returns_201_with_generated_id(client):

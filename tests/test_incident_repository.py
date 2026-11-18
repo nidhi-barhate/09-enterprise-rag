@@ -143,3 +143,20 @@ def test_list_without_filters_respects_limit(session):
 
 def test_list_unknown_service_returns_empty(session):
     assert IncidentRepository(session).list(service=f"none-{uuid.uuid4()}") == []
+
+
+# --- get_many ---
+
+
+def test_get_many_returns_found_incidents_keyed_by_id(session):
+    repo = IncidentRepository(session)
+    a, b = make_incident(), make_incident()
+    repo.add(a)
+    repo.add(b)
+    session.expire_all()
+    result = repo.get_many([a.id, b.id, uuid.uuid4()])  # one unknown id
+    assert result == {a.id: a, b.id: b}
+
+
+def test_get_many_with_no_ids_returns_empty_dict(session):
+    assert IncidentRepository(session).get_many([]) == {}

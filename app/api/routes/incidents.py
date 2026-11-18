@@ -1,19 +1,34 @@
+import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_session
+from app.api.deps import get_incident_indexer, get_session
 from app.api.dto.incident import Incident, IncidentCreate, IncidentStatus, Severity
 from app.repository.incident_repository import IncidentRepository
+from app.services.incident_indexer import IncidentIndexer
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/incidents", tags=["incidents"])
 
 
 @router.post("", response_model=Incident, status_code=status.HTTP_201_CREATED)
-def create_incident(payload: IncidentCreate, session: Session = Depends(get_session)):
+def create_incident(
+    payload: IncidentCreate,
+    session: Session = Depends(get_session),
+    indexer: IncidentIndexer = Depends(get_incident_indexer),
+):
     incident = Incident(id=uuid.uuid4(), **payload.model_dump())
     IncidentRepository(session).add(incident)
+    # Best effort: Postgres is the source of truth, so an embedding/Qdrant outage
+    # must not block recording an incident (exactly when people need it most).
+    # A missed index is healed by `python -m app.scripts.reindex`. If the later
+    # commit fails, the orphan vector is harmless: search skips ids not in Postgres.
+    try:
+        indexer.index(incident)
+    except Exception:
+        logger.warning("Failed to index incident %s", incident.id, exc_info=True)
     return incident
 
 
