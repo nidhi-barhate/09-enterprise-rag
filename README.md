@@ -2,7 +2,7 @@
 
 > A production-oriented Enterprise RAG system built using Python, FastAPI, PostgreSQL, Qdrant, and Ollama that helps engineering teams investigate incidents using historical incident reports, runbooks, troubleshooting guides, and technical documentation, with grounded answers and citations.
 
-> **Status:** Phase 1 (Knowledge Foundation) is complete. Phase 2 (RAG Engine) is in progress: semantic search over incidents works end to end. Document indexing, hybrid search, reranking, and grounded answers are **Planned**.
+> **Status:** Phase 1 (Knowledge Foundation) is complete. Phase 2 (RAG Engine) is in progress: semantic search over incidents works end to end and is measured against a seeded test dataset. Document chunking, indexing, and search exist as a tested service layer but are **not yet exposed through the API**. Hybrid search, reranking, grounded answers, and the UI are **Planned**.
 
 ---
 
@@ -27,6 +27,11 @@ This project is built step by step as a hands-on way to learn **Enterprise RAG e
 - Ollama (`nomic-embed-text` embeddings)
 - AWS Bedrock / Claude *(planned)*
 - LangGraph *(planned)*
+
+📖 **Visual guides** (open in a browser):
+
+- [`docs/opsmind-overview.html`](docs/opsmind-overview.html): step-by-step flows and every file explained
+- [`docs/qdrant-story.html`](docs/qdrant-story.html): a short animated story with subtitles explaining what Qdrant does
 
 ---
 
@@ -64,6 +69,7 @@ Runbooks, troubleshooting guides, and technical docs are stored as `Document`s.
 - `DocumentType` enum: `runbook`, `troubleshooting_guide`, `technical_doc`
 - Optional `service` (a document can apply to every service)
 - Server-generated `id` and UTC `created_at`
+- Create, get, and list through the API (storage only; see *Planned* for search)
 
 ---
 
@@ -110,6 +116,7 @@ Mapper  ──>  ORM Record  ──>  PostgreSQL
 
 - Repositories accept and return domain objects; ORM objects never leave them
 - Repositories **flush but never commit**: the caller owns the transaction
+- `get_many(ids)` loads many records in one query (used to turn Qdrant hits into full records)
 
 ---
 
@@ -122,7 +129,7 @@ Mapper  ──>  ORM Record  ──>  PostgreSQL
 | `POST` | `/incidents` | Create an incident (server generates the id) and index it |
 | `GET` | `/incidents/{id}` | Fetch one incident (404 if unknown) |
 | `GET` | `/incidents` | List incidents: `service`, `severity`, `status`, `limit`, `offset` |
-| `POST` | `/documents` | Create a document |
+| `POST` | `/documents` | Create a document (stored in PostgreSQL only) |
 | `GET` | `/documents/{id}` | Fetch one document |
 | `GET` | `/documents` | List documents: `service`, `doc_type`, `limit`, `offset` |
 | `GET` | `/search/incidents` | Semantic search: `q`, `service`, `severity`, `status`, `limit`, `min_score` |
@@ -180,16 +187,57 @@ Ranked results: incident + score
 
 - Creating an incident indexes it in Qdrant **best effort**: PostgreSQL is the source of truth, so an embedding or Qdrant outage never blocks recording an incident (the failure is logged)
 - `python -m app.scripts.reindex` rebuilds the vector index from PostgreSQL, healing missed or pre-existing incidents. It is safe to run repeatedly.
-- The API ensures the collection exists at startup, without failing if Qdrant is down
+- The API ensures the incident collection exists at startup, without failing if Qdrant is down
+
+---
+
+### ✂️ Document Chunking, Indexing, and Search *(service layer)*
+
+Long runbooks are split into chunks so each chunk gets its own vector and keeps a single topic.
+
+```text
+Document (PostgreSQL)
+      │
+      ▼
+chunk_text(size, overlap)   paragraph → line → sentence → space → hard cut
+      │
+      ▼
+embed chunks in batches (title added to the embedded text)
+      │
+      ▼
+Qdrant "document_chunks": one point per chunk
+      id      = uuid5(document id, chunk number)   (deterministic)
+      payload = document_id, chunk_index, chunk_count, title,
+                doc_type, service, source, text
+      │
+      ▼
+search → best chunks → keep the best chunk per document → load documents from PostgreSQL
+```
+
+- **Chunker:** a pure function; chunks never exceed `size`, neighbours share about `overlap` characters, and cuts prefer natural boundaries
+- **Indexer:** embeds first and writes second (an Ollama failure leaves existing chunks untouched), removes chunks that no longer exist when a document gets shorter, and can delete all chunks of a document
+- **Search:** returns the **best passage per document** with its score, so the matched text can be shown as a citation
+- A document **without a service applies to every service**, so it stays in results when filtering by service
+- ⚠️ Not wired to the API yet: `POST /documents` does not index, there is no `/search/documents` endpoint, and the real `document_chunks` collection has not been created
+
+---
+
+### 🌱 Test Data and Search Evaluation
+
+- `python -m app.scripts.seed_incidents` loads **100 synthetic incidents** (10 scenarios × 10 differently worded incidents) into **PostgreSQL and Qdrant**
+  - fixed ids and a `seed` tag, so repeating it never duplicates and `--clean` removes only the seeded incidents
+- `python -m app.scripts.evaluate_search` asks 20 questions with known answers and reports whether the **first result** and the **top 5** come from the right scenario
+- Example run on the seeded data: the first result was from the right scenario for 18 of 20 questions (90%). Treat this as a baseline for comparing future changes (hybrid search, reranking), not as a real-world accuracy number: the data is synthetic and small.
 
 ---
 
 ### 🧪 Testing
 
-- Unit tests for Pydantic models, mappers, and the embedding client (mocked HTTP)
+- Unit tests for Pydantic models, mappers, the chunker, and the embedding client (mocked HTTP)
 - Repository and API tests against real PostgreSQL, wrapped in a transaction that is always rolled back
-- Qdrant and search tests use throwaway collections, deleted afterwards; the real `incidents` collection is never touched
+- Qdrant, indexing, and search tests use throwaway collections, deleted afterwards; the real collections are never touched
 - End-to-end tests with real Ollama, Qdrant, and PostgreSQL, including `POST /incidents` followed by `GET /search/incidents`
+- Tests for the seed data, the seed and clean logic, and the evaluation maths
 
 > Tests need PostgreSQL, the Qdrant container, and Ollama with `nomic-embed-text` running.
 
@@ -197,16 +245,19 @@ Ranked results: incident + score
 
 ## 🔮 Planned
 
-### 📄 Document Indexing
+### 🔌 Document API Wiring
 
-- Chunking long runbooks and guides
-- Embedding and indexing chunks with a link back to the source document
+- Index documents on `POST /documents` (best effort), `GET /search/documents`, and documents in the reindex script
+
+### 🖥 Simple UI
+
+- A single page served by FastAPI: search box, filters, and a results table with match scores. React comes later (Phase 6).
 
 ### 🔀 Better Retrieval
 
 - Hybrid search (dense + sparse) with payload filters
 - Reranking
-- Evaluating task prefixes for `nomic-embed-text` and score thresholds on real data
+- Tuning chunk size, task prefixes for `nomic-embed-text`, and score thresholds against the evaluation script
 
 ### 💬 Grounded Answers
 
@@ -225,9 +276,9 @@ Ranked results: incident + score
 
 - Evaluation, observability, and reliability
 
-### 🖥 Application
+### 🚢 Deployment
 
-- React frontend and a full Docker Compose deployment
+- Full Docker Compose deployment
 
 ---
 
@@ -252,13 +303,16 @@ Ranked results: incident + score
             │        Ollama       Qdrant   PostgreSQL
             │     (embeddings)  (vectors + (source of
             │                    payload)     truth)
-            └──── on create: embed + upsert ───┘
+            └── on incident create: embed + upsert ──┘
+
+   Service layer only (not exposed by the API yet):
+   chunker → DocumentIndexer → Qdrant "document_chunks" → DocumentSearchService
 ```
 
 ## Target
 
 ```text
-                     Client
+                     Client / UI
                         │
                         ▼
                      FastAPI
@@ -328,10 +382,20 @@ enterprise-rag/
 │   │      embedding_service.py
 │   │      incident_indexer.py
 │   │      incident_search_service.py
+│   │      chunker.py
+│   │      document_indexer.py
+│   │      document_search_service.py
 │   │      reindex.py
 │   │
 │   └── scripts/
 │          reindex.py
+│          seed_data.py
+│          seed_incidents.py
+│          evaluate_search.py
+│
+├── docs/
+│      opsmind-overview.html
+│      qdrant-story.html
 │
 ├── tests/
 ├── docker-compose.yml
@@ -383,6 +447,28 @@ Load incidents from PostgreSQL by id
 200 [{incident, score}, ...]      (503 if Ollama or Qdrant is unavailable)
 ```
 
+## Index and Search a Document *(service layer)*
+
+```text
+DocumentIndexer.index(document)
+      │
+      ▼
+chunk  →  embed (batches)  →  upsert chunk points  →  delete stale chunks
+
+DocumentSearchService.search(question)
+      │
+      ▼
+embed question → Qdrant (document_chunks) → best chunk per document → documents from PostgreSQL
+```
+
+## Seed and Evaluate
+
+```text
+python -m app.scripts.seed_incidents      100 incidents → PostgreSQL + Qdrant
+python -m app.scripts.evaluate_search     20 questions → first result / top-5 correctness
+python -m app.scripts.seed_incidents --clean
+```
+
 ---
 
 # 🧩 Key Design Decisions
@@ -412,7 +498,7 @@ Severity, status, and document type are stored as strings with `CHECK` constrain
 
 ## PostgreSQL + Qdrant Instead of pgvector
 
-Qdrant provides built-in dense + sparse hybrid search and payload filtering. The trade-off is two stores to keep in sync, which is why PostgreSQL remains the source of truth, the UUID is shared, and a reindex script exists.
+Qdrant provides built-in dense + sparse hybrid search and payload filtering. The trade-off is two stores to keep in sync, which is why PostgreSQL remains the source of truth, the UUID is shared, and a reindex script exists. For today's data size pgvector would also have worked, and would have been simpler.
 
 ## Best-Effort Indexing
 
@@ -421,6 +507,22 @@ Indexing runs when an incident is created, but a failure does not fail the reque
 ## Fail Loudly on Vector Size Mismatch
 
 `ensure_collection` refuses to reuse a collection with a different vector size. Changing the embedding model means recreating the collection and re-embedding everything.
+
+## Chunk Documents, Not Incidents
+
+Incidents are short, so one incident is one vector. Documents are long and cover several topics, so each is cut into chunks. In a small test with three questions, the matching chunk scored higher than the whole three-topic document every time.
+
+## Deterministic Chunk Ids
+
+A chunk's point id is `uuid5(document id, chunk number)`, so re-indexing overwrites instead of duplicating. The document's own id travels in the payload as `document_id`, which links a found chunk back to PostgreSQL.
+
+## Global Documents Match Every Service
+
+A document with no `service` applies to every service, so a service filter keeps it in the results.
+
+## Measure Search, Don't Eyeball It
+
+A seeded dataset with known answers and an evaluation script turn "it looks right" into numbers that can be compared before and after each retrieval change.
 
 ---
 
@@ -441,7 +543,7 @@ Indexing runs when an incident is created, but a failure does not fail the reque
 | Orchestration | LangGraph *(planned)* |
 | Testing | Pytest, FastAPI TestClient |
 | Containers | Docker Compose (Qdrant today, full stack *planned*) |
-| Frontend | React *(planned)* |
+| Frontend | A simple served page first, React later *(planned)* |
 
 ---
 
@@ -500,7 +602,25 @@ python -m uvicorn main:app --reload
 
 If port 8000 is already taken, add `--port 8001`. Open `/docs` for the interactive API documentation.
 
-## 7. Index existing incidents
+## 7. Add test data (optional but recommended)
+
+Load 100 synthetic incidents into PostgreSQL and Qdrant, then measure search quality:
+
+```bash
+python -m app.scripts.seed_incidents
+```
+
+```bash
+python -m app.scripts.evaluate_search
+```
+
+Remove the seeded incidents again (your own incidents are left alone):
+
+```bash
+python -m app.scripts.seed_incidents --clean
+```
+
+## 8. Reindex (only when needed)
 
 Incidents created through the API are indexed automatically. To index incidents that already exist, or to heal missed ones:
 
@@ -508,7 +628,7 @@ Incidents created through the API are indexed automatically. To index incidents 
 python -m app.scripts.reindex
 ```
 
-## 8. Run the tests
+## 9. Run the tests
 
 ```bash
 python -m pytest
@@ -523,13 +643,13 @@ python -m pytest
 | Phase | Focus | Status |
 |---|---|---|
 | 1 | Knowledge foundation: incident models, ingestion, APIs | ✅ Complete |
-| 2 | RAG engine: embeddings, Qdrant retrieval, grounded answers | 🚧 In progress (incident search done) |
+| 2 | RAG engine: embeddings, Qdrant retrieval, grounded answers | 🚧 In progress (incident search and document chunking done; API wiring and answers pending) |
 | 3 | Investigation: multi-source reasoning, LangGraph | ⏳ Planned |
 | 4 | Security: authentication, RBAC, document permissions | ⏳ Planned |
 | 5 | Production: evaluation, observability, reliability | ⏳ Planned |
 | 6 | Application: React frontend and deployment | ⏳ Planned |
 
-**Next up in Phase 2:** document chunking and indexing, then hybrid search, reranking, and grounded answers with citations.
+**Next up:** a simple UI for search, wiring document indexing and search into the API, then hybrid search, reranking, and grounded answers with citations.
 
 ---
 
@@ -549,7 +669,9 @@ After completing this project, you will understand:
 - Embeddings with Ollama and vector dimensions
 - Qdrant collections, points, payloads, filters, and cosine similarity
 - Keeping a vector index in sync with a source-of-truth database
-- Semantic search and ranking
+- Chunking long documents, overlap, and deterministic chunk ids
+- Semantic search, ranking, and returning the best passage per document
+- Building a seeded dataset and measuring search quality
 - Graceful degradation when dependent services are down
 - Hybrid search, reranking, and citations *(upcoming)*
 - LangGraph investigation workflows *(upcoming)*
@@ -567,6 +689,7 @@ After completing this project, you will understand:
 - Source-of-truth plus search-index architecture
 - Idempotent re-indexing keyed by a shared UUID
 - Database-backed and service-backed integration testing
+- Evaluation-driven retrieval development
 
 ---
 
@@ -575,7 +698,7 @@ After completing this project, you will understand:
 At this stage the project intentionally does **not** include:
 
 - LLM answer generation or citations
-- Document chunking and indexing
+- Document indexing and search through the API (the service layer exists)
 - Hybrid search or reranking
 - Authentication or authorization
 - A frontend
@@ -583,4 +706,4 @@ At this stage the project intentionally does **not** include:
 
 The purpose of the current stage is specifically:
 
-> **Building a tested knowledge foundation and a working semantic retrieval layer before adding generation.**
+> **Building a tested knowledge foundation and a measurable semantic retrieval layer before adding generation.**

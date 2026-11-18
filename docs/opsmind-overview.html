@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpsMind AI Overview</title>
+<style>
+  :root {
+    --bg: #f6f8fa; --card: #ffffff; --ink: #16202a; --muted: #566676; --line: #dde4ea;
+    --api: #0f766e; --api-soft: #d5efeb;
+    --pg: #2563eb;  --pg-soft: #dbe7fd;
+    --qd: #7c3aed;  --qd-soft: #e7defc;
+    --ol: #c2680a;  --ol-soft: #fbe6c8;
+    --cl: #475569;  --cl-soft: #e3e8ee;
+    --ok: #15803d;  --warn: #b45309; --warn-soft: #fdecc8; --bad: #b91c1c;
+    --code-bg: #eef2f6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0e151d; --card: #161f2a; --ink: #e8eef4; --muted: #9db0c1; --line: #2a3745;
+      --api: #2dd4bf; --api-soft: #10312e;
+      --pg: #6ea0ff;  --pg-soft: #15264a;
+      --qd: #b197fc;  --qd-soft: #2a1f4d;
+      --ol: #f0a24b;  --ol-soft: #43290d;
+      --cl: #aab8c6;  --cl-soft: #263240;
+      --ok: #4ade80;  --warn: #f0a24b; --warn-soft: #43290d; --bad: #f87171;
+      --code-bg: #1d2835;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px 80px; }
+  header { padding: 44px 0 20px; }
+  h1 { font-size: 2rem; margin: 0 0 6px; letter-spacing: -0.02em; }
+  h2 { font-size: 1.45rem; margin: 0 0 6px; letter-spacing: -0.01em; }
+  h3 { font-size: 1.05rem; margin: 0 0 4px; }
+  p { margin: 0 0 10px; }
+  .lead { font-size: 1.1rem; color: var(--muted); max-width: 760px; }
+  .muted { color: var(--muted); }
+  code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.86em; }
+  code { background: var(--code-bg); padding: 1px 6px; border-radius: 5px; }
+  pre { background: var(--code-bg); padding: 14px 16px; border-radius: 10px; overflow-x: auto; margin: 8px 0 0; line-height: 1.5; }
+  pre code { background: none; padding: 0; }
+  nav { position: sticky; top: 0; z-index: 10; background: var(--bg); border-bottom: 1px solid var(--line); margin: 0 -16px; padding: 10px 16px; display: flex; gap: 8px; overflow-x: auto; }
+  nav a { white-space: nowrap; text-decoration: none; color: var(--ink); background: var(--card); border: 1px solid var(--line); padding: 5px 12px; border-radius: 999px; font-size: 0.88rem; }
+  nav a:hover { border-color: var(--api); color: var(--api); }
+  section { margin-top: 44px; scroll-margin-top: 64px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; }
+  .grid { display: grid; gap: 14px; }
+  .g2 { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+  .g3 { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+  .tag { display: inline-block; font-size: 0.72rem; font-weight: 600; padding: 2px 9px; border-radius: 999px; letter-spacing: 0.02em; }
+  .t-api { background: var(--api-soft); color: var(--api); }
+  .t-pg  { background: var(--pg-soft);  color: var(--pg); }
+  .t-qd  { background: var(--qd-soft);  color: var(--qd); }
+  .t-ol  { background: var(--ol-soft);  color: var(--ol); }
+  .t-cl  { background: var(--cl-soft);  color: var(--cl); }
+  .t-warn { background: var(--warn-soft); color: var(--warn); }
+
+  /* flow explorer */
+  .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 14px 0; }
+  .tab { cursor: pointer; border: 1px solid var(--line); background: var(--card); color: var(--ink); padding: 8px 14px; border-radius: 10px; font: inherit; font-size: 0.92rem; }
+  .tab[aria-selected="true"] { background: var(--api); color: #fff; border-color: var(--api); }
+  @media (prefers-color-scheme: dark) { .tab[aria-selected="true"] { color: #062b27; } }
+  .flow { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+  @media (max-width: 820px) { .flow { grid-template-columns: 1fr; } }
+  svg { width: 100%; height: auto; display: block; }
+  .node rect { fill: var(--card); stroke: var(--line); stroke-width: 2; transition: all .2s; }
+  .node text { fill: var(--ink); font-size: 14px; font-weight: 600; text-anchor: middle; }
+  .node .sub { font-size: 11px; font-weight: 400; fill: var(--muted); }
+  .node.on rect { stroke-width: 3.5; }
+  .node.n-client.on rect { stroke: var(--cl); fill: var(--cl-soft); }
+  .node.n-api.on rect    { stroke: var(--api); fill: var(--api-soft); }
+  .node.n-pg.on rect     { stroke: var(--pg); fill: var(--pg-soft); }
+  .node.n-qd.on rect     { stroke: var(--qd); fill: var(--qd-soft); }
+  .node.n-ol.on rect     { stroke: var(--ol); fill: var(--ol-soft); }
+  .node { opacity: .55; transition: opacity .2s; }
+  .node.on { opacity: 1; }
+  .arrow { stroke: var(--line); stroke-width: 2.5; fill: none; transition: all .2s; }
+  .arrow.on { stroke: var(--api); stroke-width: 4; stroke-dasharray: 8 6; animation: dash 0.8s linear infinite; }
+  @keyframes dash { to { stroke-dashoffset: -14; } }
+  @media (prefers-reduced-motion: reduce) { .arrow.on { animation: none; } }
+  .stepbox h3 { display: flex; align-items: center; gap: 8px; }
+  .num { display: inline-flex; width: 26px; height: 26px; align-items: center; justify-content: center; border-radius: 50%; background: var(--api); color: #fff; font-size: 0.85rem; flex: none; }
+  @media (prefers-color-scheme: dark) { .num { color: #062b27; } }
+  .files { margin-top: 10px; display: flex; gap: 6px; flex-wrap: wrap; }
+  .ctrl { display: flex; gap: 8px; margin-top: 14px; align-items: center; }
+  .btn { cursor: pointer; border: 1px solid var(--line); background: var(--card); color: var(--ink); padding: 7px 16px; border-radius: 8px; font: inherit; }
+  .btn:hover:not(:disabled) { border-color: var(--api); color: var(--api); }
+  .btn:disabled { opacity: .4; cursor: default; }
+  .btn.primary { background: var(--api); color: #fff; border-color: var(--api); }
+  @media (prefers-color-scheme: dark) { .btn.primary { color: #062b27; } }
+  .dots { display: flex; gap: 5px; margin-left: auto; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--line); }
+  .dot.on { background: var(--api); }
+  .note { margin-top: 10px; font-size: 0.9rem; padding: 8px 12px; border-radius: 8px; background: var(--warn-soft); color: var(--warn); }
+
+  /* path chips */
+  .path { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 10px 0; }
+  .chip { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-size: 0.86rem; }
+  .chip small { display: block; color: var(--muted); font-size: 0.74rem; }
+  .arr { color: var(--muted); }
+
+  /* tables */
+  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: .04em; }
+  .tablewrap { overflow-x: auto; }
+
+  /* file explorer */
+  .search { width: 100%; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font: inherit; margin: 10px 0 6px; }
+  .group { margin-top: 22px; }
+  .group > h3 { margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+  .file { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; margin-bottom: 10px; }
+  .file .path-name { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.88rem; font-weight: 600; word-break: break-all; }
+  .file .role { font-weight: 600; margin: 4px 0 2px; }
+  .file p { margin: 0 0 4px; color: var(--muted); font-size: 0.93rem; }
+  .file .java { font-size: 0.86rem; color: var(--api); }
+  .hidden { display: none; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 0; }
+  ul.tight { margin: 6px 0 0; padding-left: 20px; }
+  ul.tight li { margin-bottom: 4px; }
+  .say { border-left: 4px solid var(--api); }
+  footer { margin-top: 50px; color: var(--muted); font-size: 0.86rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <span class="tag t-api">Phase 1 complete · Phase 2 in progress</span>
+  <h1>OpsMind AI: how it works, A to Z</h1>
+  <p class="lead">An incident-investigation backend. An engineer describes a problem in plain words, and the system finds the most similar past incidents, even when the wording is different.</p>
+</header>
+
+<nav>
+  <a href="#big">Big picture</a>
+  <a href="#flows">Step-by-step flows</a>
+  <a href="#layers">Code layers</a>
+  <a href="#files">Every file</a>
+  <a href="#data">Data stored</a>
+  <a href="#decisions">Design decisions</a>
+  <a href="#status">Done / not done</a>
+  <a href="#run">Run it</a>
+  <a href="#say">2-minute explanation</a>
+  <a href="qdrant-story.html">Qdrant story ↗</a>
+</nav>
+
+<!-- ============ BIG PICTURE ============ -->
+<section id="big">
+  <h2>1. The big picture</h2>
+  <p class="muted">Five pieces. One Python API in the middle talks to three helpers.</p>
+  <div class="grid g3" style="margin-top:12px">
+    <div class="card"><span class="tag t-api">FastAPI</span><h3 style="margin-top:8px">The API</h3><p class="muted">Receives requests, checks them, and coordinates everything. This is the code in this repo.</p></div>
+    <div class="card"><span class="tag t-pg">PostgreSQL</span><h3 style="margin-top:8px">The record keeper</h3><p class="muted">Stores every incident and document. This is the <b>source of truth</b>: if anything else is lost, it can be rebuilt from here.</p></div>
+    <div class="card"><span class="tag t-ol">Ollama</span><h3 style="margin-top:8px">The meaning translator</h3><p class="muted">A local AI model (<code>nomic-embed-text</code>) that turns text into 768 numbers (an <b>embedding</b>). Similar meaning gives similar numbers.</p></div>
+    <div class="card"><span class="tag t-qd">Qdrant</span><h3 style="margin-top:8px">The similarity finder</h3><p class="muted">A vector database (runs in Docker). Stores each incident's 768 numbers and quickly finds the closest ones to a question.</p></div>
+    <div class="card"><span class="tag t-cl">Client</span><h3 style="margin-top:8px">You</h3><p class="muted">A browser, <code>curl</code>, or Swagger at <code>/docs</code>. A frontend comes in a later phase.</p></div>
+    <div class="card" style="border-color:var(--api)"><h3>The one idea to remember</h3><p class="muted" style="margin:0">Postgres holds the <b>facts</b>. Qdrant holds the <b>meaning</b>. The same UUID links them.</p></div>
+  </div>
+</section>
+
+<!-- ============ FLOWS ============ -->
+<section id="flows">
+  <h2>2. Follow a request, step by step</h2>
+  <p class="muted">Pick a flow, then press Next. The diagram lights up what is involved at each step.</p>
+  <div class="tabs" role="tablist" id="tabs"></div>
+  <div class="flow">
+    <div class="card">
+      <svg viewBox="0 0 760 340" role="img" aria-label="Request flow diagram" id="diagram">
+        <defs>
+          <marker id="head" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="context-stroke"/>
+          </marker>
+        </defs>
+        <line class="arrow" id="a-client" x1="140" y1="170" x2="238" y2="170" marker-end="url(#head)" marker-start="url(#head)"/>
+        <line class="arrow" id="a-ol"     x1="378" y1="152" x2="548" y2="62"  marker-end="url(#head)" marker-start="url(#head)"/>
+        <line class="arrow" id="a-qd"     x1="378" y1="170" x2="548" y2="170" marker-end="url(#head)" marker-start="url(#head)"/>
+        <line class="arrow" id="a-pg"     x1="378" y1="188" x2="548" y2="278" marker-end="url(#head)" marker-start="url(#head)"/>
+
+        <g class="node n-client" id="n-client"><rect x="20" y="138" width="120" height="64" rx="12"/><text x="80" y="166" id="t-client">Client</text><text class="sub" x="80" y="184" id="s-client">browser / curl</text></g>
+        <g class="node n-api" id="n-api"><rect x="240" y="138" width="138" height="64" rx="12"/><text x="309" y="166" id="t-api">FastAPI</text><text class="sub" x="309" y="184" id="s-api">the code in this repo</text></g>
+        <g class="node n-ol" id="n-ol"><rect x="550" y="28" width="190" height="64" rx="12"/><text x="645" y="56">Ollama</text><text class="sub" x="645" y="74">text → 768 numbers</text></g>
+        <g class="node n-qd" id="n-qd"><rect x="550" y="138" width="190" height="64" rx="12"/><text x="645" y="166">Qdrant</text><text class="sub" x="645" y="184">vectors + filters</text></g>
+        <g class="node n-pg" id="n-pg"><rect x="550" y="248" width="190" height="64" rx="12"/><text x="645" y="276">PostgreSQL</text><text class="sub" x="645" y="294">the facts (source of truth)</text></g>
+      </svg>
+      <div class="ctrl">
+        <button class="btn" id="prev">← Back</button>
+        <button class="btn primary" id="next">Next →</button>
+        <div class="dots" id="dots"></div>
+      </div>
+    </div>
+    <div class="card stepbox" id="stepbox" aria-live="polite"></div>
+  </div>
+</section>
+
+<!-- ============ LAYERS ============ -->
+<section id="layers">
+  <h2>3. Inside the API: the layers</h2>
+  <p class="muted">Every request passes through the same layers. Each layer does one job.</p>
+  <div class="card">
+    <h3>Saving an incident (the Postgres side)</h3>
+    <div class="path">
+      <div class="chip">Route<small>routes/incidents.py</small></div><span class="arr">→</span>
+      <div class="chip">Validation<small>dto/incident.py</small></div><span class="arr">→</span>
+      <div class="chip">Repository<small>incident_repository.py</small></div><span class="arr">→</span>
+      <div class="chip">Mapper<small>incident_mapper.py</small></div><span class="arr">→</span>
+      <div class="chip">Table definition<small>model/incident_record.py</small></div><span class="arr">→</span>
+      <div class="chip">PostgreSQL<small>table "incidents"</small></div>
+    </div>
+    <h3 style="margin-top:16px">Making it searchable (the AI side)</h3>
+    <div class="path">
+      <div class="chip">Indexer<small>incident_indexer.py</small></div><span class="arr">→</span>
+      <div class="chip">Embedding client<small>embedding_service.py</small></div><span class="arr">→</span>
+      <div class="chip">Ollama<small>768 numbers</small></div><span class="arr">→</span>
+      <div class="chip">Qdrant<small>collection "incidents"</small></div>
+    </div>
+    <h3 style="margin-top:16px">Answering a search</h3>
+    <div class="path">
+      <div class="chip">Route<small>routes/search.py</small></div><span class="arr">→</span>
+      <div class="chip">Search service<small>incident_search_service.py</small></div><span class="arr">→</span>
+      <div class="chip">Ollama + Qdrant<small>find nearest ids</small></div><span class="arr">→</span>
+      <div class="chip">Repository.get_many<small>load from Postgres</small></div>
+    </div>
+    <h3 style="margin-top:16px">Making documents searchable <span class="tag t-warn">service layer, not in the API yet</span></h3>
+    <div class="path">
+      <div class="chip">Document indexer<small>document_indexer.py</small></div><span class="arr">→</span>
+      <div class="chip">Chunker<small>chunker.py: cut into pieces</small></div><span class="arr">→</span>
+      <div class="chip">Embedding client<small>one vector per chunk</small></div><span class="arr">→</span>
+      <div class="chip">Qdrant<small>collection "document_chunks"</small></div><span class="arr">→</span>
+      <div class="chip">Document search<small>best passage per document</small></div><span class="arr">→</span>
+      <div class="chip">Repository.get_many<small>documents from Postgres</small></div>
+    </div>
+  </div>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card"><h3>Why separate layers?</h3><p class="muted" style="margin:0">Routes know HTTP. Repositories know the database. Services know Ollama and Qdrant. Changing one (say, swapping the vector database) does not touch the others, and each can be tested alone.</p></div>
+    <div class="card"><h3>Who owns the transaction?</h3><p class="muted" style="margin:0">Not the repository. <code>get_session</code> in <code>api/deps.py</code> opens one database session per request, commits if the request succeeds, and rolls back if anything raises.</p></div>
+  </div>
+</section>
+
+<!-- ============ FILES ============ -->
+<section id="files">
+  <h2>4. Every file and what it does</h2>
+  <p class="muted">Search, or scroll. The green line compares it to something familiar from Java / Spring.</p>
+  <input class="search" id="search" type="search" placeholder="Search files, e.g. 'embedding', 'transaction', 'migration'" aria-label="Search files">
+  <div id="filecount" class="muted" style="font-size:.88rem"></div>
+  <div id="filelist"></div>
+</section>
+
+<!-- ============ DATA ============ -->
+<section id="data">
+  <h2>5. What data is stored, and where</h2>
+  <div class="grid g2">
+    <div class="card">
+      <span class="tag t-pg">PostgreSQL</span>
+      <h3 style="margin-top:8px">Table <code>incidents</code></h3>
+      <div class="tablewrap"><table>
+        <tr><th>Column</th><th>Type</th><th>Notes</th></tr>
+        <tr><td>id</td><td>uuid</td><td>primary key, made by the server</td></tr>
+        <tr><td>title</td><td>varchar(255)</td><td>required</td></tr>
+        <tr><td>description</td><td>text</td><td>required</td></tr>
+        <tr><td>severity</td><td>varchar(10)</td><td>CHECK: SEV1 to SEV4</td></tr>
+        <tr><td>status</td><td>varchar(20)</td><td>CHECK: open, mitigated, resolved</td></tr>
+        <tr><td>service</td><td>varchar(100)</td><td>e.g. payment-service</td></tr>
+        <tr><td>reported_at</td><td>timestamptz</td><td>always stored as UTC</td></tr>
+        <tr><td>resolved_at</td><td>timestamptz</td><td>empty unless status = resolved</td></tr>
+        <tr><td>root_cause, resolution</td><td>text</td><td>optional</td></tr>
+        <tr><td>tags</td><td>varchar[]</td><td>default empty list</td></tr>
+      </table></div>
+      <p class="muted" style="margin-top:8px">Index: <code>(service, reported_at)</code>, for "incidents of service X, newest first".</p>
+      <p class="muted" style="margin:6px 0 0">Table <code>documents</code> (runbooks and guides) has the same style: title, doc_type, optional service, content, source, tags, created_at.</p>
+    </div>
+    <div class="card">
+      <span class="tag t-qd">Qdrant</span>
+      <h3 style="margin-top:8px">Collection <code>incidents</code> (one point per incident)</h3>
+<pre><code>{
+  "id":      "b2a5b49a-…-91b3e5",   // same UUID as Postgres
+  "vector":  [0.012, -0.34, …],     // 768 numbers from Ollama
+  "payload": {
+    "service":     "payment-service",
+    "severity":    "SEV2",
+    "status":      "open",
+    "tags":        ["deploy"],
+    "reported_at": "2026-01-02T10:00:00+00:00"
+  }
+}</code></pre>
+      <ul class="tight muted">
+        <li><b>What is turned into numbers:</b> title + description + root cause + resolution.</li>
+        <li><b>What stays as payload:</b> service, severity, status, tags. They are used to <i>filter</i>, not to measure meaning.</li>
+        <li>Similarity uses <b>cosine distance</b>: 1.0 means same direction, 0 means unrelated.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="card" style="margin-top:14px">
+    <span class="tag t-qd">Qdrant</span> <span class="tag t-warn">code ready, collection not created yet</span>
+    <h3 style="margin-top:8px">Collection <code>document_chunks</code> (one point per chunk)</h3>
+<pre><code>{
+  "id":      "uuid5(document id, chunk number)",   // always the same for the same chunk
+  "vector":  [0.03, -0.11, …],                      // 768 numbers for title + chunk text
+  "payload": {
+    "document_id": "123e4567-…",                    // the link back to PostgreSQL
+    "chunk_index": 2,  "chunk_count": 5,
+    "title":    "DB failover runbook",
+    "doc_type": "runbook",
+    "service":  "payment-service",                   // null = applies to every service
+    "source":   "runbooks/failover.md",
+    "text":     "Promote the replica to primary …"   // the passage: usable as a citation
+  }
+}</code></pre>
+    <ul class="tight muted">
+      <li>A document becomes <b>many</b> points, so a point id can no longer be the document id. The document id moves into the payload.</li>
+      <li>Long documents are cut into chunks so each vector means one topic, instead of a blurry average of everything.</li>
+    </ul>
+  </div>
+  <div class="card" style="margin-top:14px">
+    <h3>The API endpoints</h3>
+    <div class="tablewrap"><table>
+      <tr><th>Method</th><th>Path</th><th>What it does</th></tr>
+      <tr><td>GET</td><td>/health, /health/database</td><td>Is the app up? Can it reach Postgres?</td></tr>
+      <tr><td>POST</td><td>/incidents</td><td>Validate, save to Postgres, index in Qdrant, return 201</td></tr>
+      <tr><td>GET</td><td>/incidents</td><td>List, with filters service, severity, status and paging (limit, offset)</td></tr>
+      <tr><td>GET</td><td>/incidents/{id}</td><td>One incident, or 404</td></tr>
+      <tr><td>POST, GET</td><td>/documents, /documents/{id}, /documents</td><td>Store and read documents (stored only, not searchable yet)</td></tr>
+      <tr><td>GET</td><td>/search/incidents?q=…</td><td>Search by meaning, with optional filters, limit and min_score</td></tr>
+    </table></div>
+  </div>
+</section>
+
+<!-- ============ DECISIONS ============ -->
+<section id="decisions">
+  <h2>6. Design decisions, in plain words</h2>
+  <div class="grid g2">
+    <div class="card"><h3>Postgres is the boss</h3><p class="muted" style="margin:0">Qdrant can always be rebuilt from Postgres (<code>reindex</code>). So Postgres decides what exists.</p></div>
+    <div class="card"><h3>Same UUID in both</h3><p class="muted" style="margin:0">The Postgres id is the Qdrant point id. Re-indexing the same incident overwrites its point instead of creating a duplicate.</p></div>
+    <div class="card"><h3>Indexing is "best effort"</h3><p class="muted" style="margin:0">If Ollama or Qdrant is down, the incident is still saved (a warning is logged). Recording an incident must work during an outage. Missed ones are fixed by <code>reindex</code>.</p></div>
+    <div class="card"><h3>Two models per concept</h3><p class="muted" style="margin:0"><code>Incident</code> (Pydantic) is the API contract with rules. <code>IncidentRecord</code> (SQLAlchemy) is the table. A mapper converts between them, so each can change independently.</p></div>
+    <div class="card"><h3>Rules at the edge</h3><p class="muted" style="margin:0">Bad input (too long, resolved without a date) gets a clear <b>422</b>, never a database error. The DB also has CHECK constraints as a safety net.</p></div>
+    <div class="card"><h3>Outages are 503, not 500</h3><p class="muted" style="margin:0">If search cannot reach Ollama or Qdrant, the client sees "temporarily unavailable", which is honest: it is not their mistake.</p></div>
+    <div class="card"><h3>Qdrant instead of pgvector</h3><p class="muted" style="margin:0">Chosen for built-in hybrid search and filtering. The price: two stores to keep in sync.</p></div>
+    <div class="card"><h3>Tests never touch real data</h3><p class="muted" style="margin:0">Database tests roll back; Qdrant tests use temporary collections that are deleted. The real <code>incidents</code> collection is never used by tests.</p></div>
+    <div class="card"><h3>Chunk documents, not incidents</h3><p class="muted" style="margin:0">An incident is short, so one incident is one vector. A runbook covers many topics, so it is cut into chunks and each chunk gets its own vector. In a small test, the matching chunk scored higher than the whole document every time.</p></div>
+    <div class="card"><h3>Deterministic chunk ids</h3><p class="muted" style="margin:0">A chunk's id is made from the document id and the chunk number, so indexing again overwrites instead of duplicating. The document id also sits in the payload to find all of a document's chunks.</p></div>
+    <div class="card"><h3>Global documents match every service</h3><p class="muted" style="margin:0">A runbook with no service applies everywhere, so filtering by a service still returns it.</p></div>
+    <div class="card"><h3>Measure search, don't eyeball it</h3><p class="muted" style="margin:0">100 seeded incidents with known answers and a script that counts how often the right scenario comes first. Now every future change (hybrid search, reranking) can be compared with a number.</p></div>
+  </div>
+</section>
+
+<!-- ============ STATUS ============ -->
+<section id="status">
+  <h2>7. What is done, and what is not</h2>
+  <div class="grid g2">
+    <div class="card">
+      <h3 style="color:var(--ok)">✔ Working now</h3>
+      <ul class="tight">
+        <li>Incident and document models with validation</li>
+        <li>PostgreSQL tables, with two Alembic migrations</li>
+        <li>Create, get, and list for incidents and documents</li>
+        <li>Embeddings through Ollama (768 dimensions)</li>
+        <li>Qdrant running in Docker, collection with filters</li>
+        <li>Automatic indexing of new incidents</li>
+        <li>Semantic search over incidents, with filters</li>
+        <li>Reindex script</li>
+        <li>Document chunking, indexing and best-passage search (as a service layer, tested with real Ollama and Qdrant)</li>
+        <li>100 seeded test incidents in PostgreSQL <b>and</b> Qdrant, plus an evaluation script (18 of 20 questions had the right scenario first in a first run on synthetic data)</li>
+        <li>210 tests passed in the last full run (they use real Postgres, Qdrant and Ollama)</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3 style="color:var(--warn)">⏳ Not built yet</h3>
+      <ul class="tight">
+        <li>Documents in the <b>API</b>: <code>POST /documents</code> does not index yet, and there is no <code>/search/documents</code></li>
+        <li>A simple UI (search box, filters, results table)</li>
+        <li>Hybrid search (keywords + meaning) and reranking</li>
+        <li>An AI-written answer with citations (the "G" in RAG)</li>
+        <li>Multi-source investigation (LangGraph)</li>
+        <li>Login, roles, and document permissions</li>
+        <li>Metrics, observability, full Docker deployment</li>
+      </ul>
+      <div class="note">Today the system finds similar incidents through the API. Documents can be indexed and searched in code, but not through the API yet. It does not write an answer yet.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ RUN ============ -->
+<section id="run">
+  <h2>8. Run it yourself</h2>
+  <div class="card">
+<pre><code>source .venv/bin/activate
+docker compose up -d                    # start Qdrant
+ollama pull nomic-embed-text            # once
+alembic upgrade head                    # create tables
+python -m app.scripts.seed_incidents    # 100 test incidents into Postgres + Qdrant
+python -m app.scripts.evaluate_search   # how often is the right scenario first?
+python -m app.scripts.seed_incidents --clean   # remove only the seeded incidents
+python -m app.scripts.reindex           # rebuild the Qdrant index from Postgres
+python -m uvicorn main:app --reload     # add --port 8001 if 8000 is busy
+python -m pytest                        # run all tests</code></pre>
+    <p class="muted" style="margin:10px 0 0">Then open <code>/docs</code> in the browser to try the endpoints.</p>
+  </div>
+</section>
+
+<!-- ============ SAY ============ -->
+<section id="say">
+  <h2>9. Explaining it to someone else</h2>
+  <div class="card say">
+    <h3>30 seconds</h3>
+    <p>"OpsMind is a backend that helps engineers during outages. You store past incidents. When something breaks, you describe it in plain words and it finds the most similar past incidents, even if the wording is different, by comparing meaning instead of keywords."</p>
+    <h3 style="margin-top:12px">2 minutes</h3>
+    <p>"Incidents are saved in PostgreSQL, which is the source of truth. When one is saved, the text is sent to a local AI model, Ollama, which turns it into a list of 768 numbers that captures its meaning. Those numbers go into Qdrant, a vector database, under the same ID. When someone searches, the question goes through the same model, Qdrant finds the closest stored vectors, and then I load the full incidents from Postgres and return them ranked, with filters like service or severity."</p>
+    <p>"If the AI side is down, incidents are still saved, and a reindex script catches up later. Long runbooks are cut into chunks, each with its own vector, so a search can point at the exact passage. That already works as a service, but is not in the API yet. To test properly, I load 100 synthetic incidents and measure how often the right kind of incident comes first: about 90 percent in a first run, on synthetic data. The next steps are wiring documents into the API, a simple UI, and then generating a cited answer with an LLM."</p>
+  </div>
+  <div class="card" style="margin-top:14px">
+    <h3>Words that may come up</h3>
+    <ul class="tight">
+      <li><b>Embedding / vector:</b> a list of numbers that represents the meaning of a text.</li>
+      <li><b>Cosine similarity:</b> how close two vectors point, from 0 (unrelated) to 1 (same).</li>
+      <li><b>Payload:</b> extra data stored next to a vector, used for filtering.</li>
+      <li><b>RAG:</b> Retrieval-Augmented Generation: first retrieve relevant facts, then let an LLM answer using only those. Retrieval is built; generation is not.</li>
+      <li><b>Migration (Alembic):</b> a versioned change to the database schema, like Flyway.</li>
+    </ul>
+  </div>
+</section>
+
+<footer>Generated from the current code of the enterprise-rag project. Status as of the last full test run.</footer>
+</div>
+
+<script>
+/* ---------------- flows ---------------- */
+var FLOWS = [
+  {
+    id: "create", label: "Create an incident (POST)",
+    labels: { client: ["Client", "browser / curl"], api: ["FastAPI", "the code in this repo"] },
+    steps: [
+      { title: "A request arrives", nodes: ["client", "api"], arrows: ["a-client"],
+        text: "The client sends <code>POST /incidents</code> with JSON: title, description, severity, status, service, reported_at and optional tags.",
+        files: ["api/routes/incidents.py"] },
+      { title: "The input is checked", nodes: ["api"], arrows: [],
+        text: "Pydantic validates the body against <code>IncidentCreate</code>: required fields, allowed severities, maximum lengths, dates in UTC, and the rule that <b>resolved</b> needs a resolved_at date. Anything wrong stops here with <b>422</b>, and nothing is saved.",
+        files: ["api/dto/incident.py", "api/dto/limits.py"] },
+      { title: "The server makes the id", nodes: ["api"], arrows: [],
+        text: "A new UUID is generated on the server (a client-supplied id is ignored) and the full <code>Incident</code> is built.",
+        files: ["api/routes/incidents.py"] },
+      { title: "Saved in PostgreSQL (not committed yet)", nodes: ["api", "pg"], arrows: ["a-pg"],
+        text: "The repository converts the incident into a table row and runs the INSERT, then <b>flushes</b>. The transaction is still open, so it can still be rolled back.",
+        files: ["repository/incident_repository.py", "repository/incident_mapper.py", "model/incident_record.py"] },
+      { title: "The text becomes numbers", nodes: ["api", "ol"], arrows: ["a-ol"],
+        text: "The indexer joins title, description, root cause and resolution into one text and asks Ollama to embed it. Ollama answers with <b>768 numbers</b>.",
+        files: ["services/incident_indexer.py", "services/embedding_service.py"] },
+      { title: "Stored in Qdrant", nodes: ["api", "qd"], arrows: ["a-qd"],
+        text: "A point is upserted into the <code>incidents</code> collection: id = the same UUID, vector = the 768 numbers, payload = service, severity, status, tags, reported_at.",
+        files: ["services/incident_indexer.py", "config/qdrant.py"],
+        note: "Steps 5 and 6 are best effort. If Ollama or Qdrant fails, a warning is logged and the request still succeeds. The reindex script fixes it later." },
+      { title: "Commit and respond", nodes: ["api", "pg", "client"], arrows: ["a-pg", "a-client"],
+        text: "<code>get_session</code> commits the transaction (or rolls it back on an error) and the client receives <b>201 Created</b> with the incident, including its new id.",
+        files: ["api/deps.py"] }
+    ]
+  },
+  {
+    id: "search", label: "Search by meaning (GET)",
+    labels: { client: ["Client", "browser / curl"], api: ["FastAPI", "the code in this repo"] },
+    steps: [
+      { title: "A question arrives", nodes: ["client", "api"], arrows: ["a-client"],
+        text: "The client sends <code>GET /search/incidents?q=payments returning 503 after deploy</code>, optionally with <code>service</code>, <code>severity</code>, <code>status</code>, <code>limit</code>, <code>min_score</code>.",
+        files: ["api/routes/search.py"] },
+      { title: "Parameters are checked", nodes: ["api"], arrows: [],
+        text: "<code>q</code> is required, <code>limit</code> must be 1 to 50, and severity and status must be valid values. Otherwise the answer is <b>422</b>.",
+        files: ["api/routes/search.py"] },
+      { title: "The question becomes numbers", nodes: ["api", "ol"], arrows: ["a-ol"],
+        text: "The question goes through the <b>same</b> Ollama model, giving 768 numbers. Using the same model for questions and incidents is what makes the comparison meaningful.",
+        files: ["services/incident_search_service.py", "services/embedding_service.py"] },
+      { title: "Qdrant finds the nearest ones", nodes: ["api", "qd"], arrows: ["a-qd"],
+        text: "Qdrant compares the question's vector with the stored ones using cosine similarity, applies the filters (service, severity, status), and returns the best ids with scores. Here the filtering and ranking happen.",
+        files: ["services/incident_search_service.py"] },
+      { title: "Full incidents come from PostgreSQL", nodes: ["api", "pg"], arrows: ["a-pg"],
+        text: "One query loads all the matching incidents (<code>WHERE id IN (...)</code>). The order from Qdrant is kept. An id that no longer exists in Postgres is skipped, so the index can be slightly out of date without breaking search.",
+        files: ["repository/incident_repository.py (get_many)"] },
+      { title: "The ranked answer", nodes: ["api", "client"], arrows: ["a-client"],
+        text: "The client receives a list of <code>{ incident, score }</code>, best first. If Ollama or Qdrant is unreachable, it gets <b>503</b> instead of a confusing 500.",
+        files: ["api/routes/search.py"] }
+    ]
+  },
+  {
+    id: "reindex", label: "Rebuild the index (script)",
+    labels: { client: ["You", "terminal"], api: ["Reindex script", "python -m app.scripts.reindex"] },
+    steps: [
+      { title: "You run the script", nodes: ["client", "api"], arrows: ["a-client"],
+        text: "<code>python -m app.scripts.reindex</code>. It makes sure the Qdrant collection exists with the right size (768) and fails loudly if it exists with another size.",
+        files: ["scripts/reindex.py", "services/incident_indexer.py (ensure_collection)"] },
+      { title: "Read incidents from PostgreSQL", nodes: ["api", "pg"], arrows: ["a-pg"],
+        text: "It reads all incidents page by page (100 at a time). PostgreSQL is the source of truth, so this is the complete list.",
+        files: ["services/reindex.py", "repository/incident_repository.py"] },
+      { title: "Embed each incident", nodes: ["api", "ol"], arrows: ["a-ol"],
+        text: "Each incident's text is sent to Ollama and comes back as 768 numbers.",
+        files: ["services/incident_indexer.py"] },
+      { title: "Upsert into Qdrant", nodes: ["api", "qd"], arrows: ["a-qd"],
+        text: "Each point is written with the incident's UUID. Because it is an upsert, running the script again just overwrites. It is safe to repeat.",
+        files: ["services/incident_indexer.py"] },
+      { title: "Done", nodes: ["api", "client"], arrows: ["a-client"],
+        text: "It prints <code>Indexed N incident(s).</code> Use it for incidents that existed before indexing, for ones whose automatic indexing failed, and after changing the embedding model.",
+        files: ["scripts/reindex.py"] }
+    ]
+  },
+  {
+    id: "doc", label: "Index a document (chunks)",
+    labels: { client: ["Your code", "service layer"], api: ["DocumentIndexer", "services/document_indexer.py"] },
+    steps: [
+      { title: "A document is handed to the indexer", nodes: ["client", "api"], arrows: ["a-client"],
+        text: "A document that is already saved in PostgreSQL (through <code>POST /documents</code>) is passed to <code>DocumentIndexer.index()</code>.",
+        files: ["services/document_indexer.py"],
+        note: "Not connected to the API yet: today it is called from code and tests. Wiring it to POST /documents is a next step." },
+      { title: "Cut into chunks", nodes: ["api"], arrows: [],
+        text: "The content is split into pieces of at most 800 characters that overlap by about 100. Cuts prefer a paragraph break, then a line break, then the end of a sentence, then a space. Each chunk stays about one topic, and a sentence cut at an edge still appears whole in the next chunk.",
+        files: ["services/chunker.py"] },
+      { title: "Chunks become numbers", nodes: ["api", "ol"], arrows: ["a-ol"],
+        text: "The chunks go to Ollama in batches of 32. The document title is put in front of each chunk's text so a piece keeps its context. This happens <b>before</b> anything is written, so an Ollama failure changes nothing in Qdrant.",
+        files: ["services/embedding_service.py", "services/document_indexer.py"] },
+      { title: "One Qdrant point per chunk", nodes: ["api", "qd"], arrows: ["a-qd"],
+        text: "Each chunk is upserted with id = <code>uuid5(document id, chunk number)</code> (always the same for the same chunk) and a payload: <code>document_id</code>, chunk number, title, type, service, source and the chunk text.",
+        files: ["services/document_indexer.py"] },
+      { title: "Old chunks are removed", nodes: ["api", "qd"], arrows: ["a-qd"],
+        text: "If the document became shorter, chunks that no longer exist are deleted (found through <code>document_id</code>). Indexing the same document again just overwrites, so it is safe to repeat.",
+        files: ["services/document_indexer.py"] },
+      { title: "Done", nodes: ["api", "client"], arrows: ["a-client"],
+        text: "The indexer returns how many chunks the document has. PostgreSQL keeps the full document; Qdrant holds only the pieces and their vectors.",
+        files: ["services/document_indexer.py"] }
+    ]
+  },
+  {
+    id: "docsearch", label: "Search documents (best passage)",
+    labels: { client: ["Your code", "service layer"], api: ["DocumentSearchService", "services/document_search_service.py"] },
+    steps: [
+      { title: "A question arrives", nodes: ["client", "api"], arrows: ["a-client"],
+        text: "<code>DocumentSearchService.search(question, service, doc_type, limit, min_score)</code> is called. There is no HTTP endpoint for it yet, so today it runs from code and tests.",
+        files: ["services/document_search_service.py"] },
+      { title: "The question becomes numbers", nodes: ["api", "ol"], arrows: ["a-ol"],
+        text: "The question goes through the same Ollama model that embedded the chunks.",
+        files: ["services/embedding_service.py"] },
+      { title: "Qdrant finds the nearest chunks", nodes: ["api", "qd"], arrows: ["a-qd"],
+        text: "Qdrant searches the <code>document_chunks</code> collection and applies the filters. A service filter keeps documents with that service <b>and</b> global documents (no service). It returns about 5 times the wanted number of chunks, because several top chunks can come from the same document.",
+        files: ["services/document_search_service.py"] },
+      { title: "Keep the best chunk per document", nodes: ["api"], arrows: [],
+        text: "Chunks arrive best first, so the first chunk seen for each <code>document_id</code> is that document's best passage. The rest are dropped, and the list is trimmed to the limit.",
+        files: ["services/document_search_service.py"] },
+      { title: "Documents come from PostgreSQL", nodes: ["api", "pg"], arrows: ["a-pg"],
+        text: "One query loads all the matching documents (<code>get_many</code>). A chunk whose document no longer exists in PostgreSQL is skipped.",
+        files: ["repository/document_repository.py"] },
+      { title: "Passage, document and score", nodes: ["api", "client"], arrows: ["a-client"],
+        text: "Each result holds the whole document, the matching passage (usable as a citation), its chunk number and its score.",
+        files: ["services/document_search_service.py"] }
+    ]
+  },
+  {
+    id: "seed", label: "Seed test data and measure",
+    labels: { client: ["You", "terminal"], api: ["Seed / evaluate scripts", "app/scripts/"] },
+    steps: [
+      { title: "Build 100 incidents in code", nodes: ["client", "api"], arrows: ["a-client"],
+        text: "<code>python -m app.scripts.seed_incidents</code>. The data has 10 scenarios (database pool, disk full, expired certificate, cache, memory, bad deploy, DNS, queue backlog, vendor outage, slow query), each written 10 different ways. Ids are fixed and every incident is tagged <code>seed</code>.",
+        files: ["scripts/seed_data.py", "scripts/seed_incidents.py"] },
+      { title: "Saved in PostgreSQL", nodes: ["api", "pg"], arrows: ["a-pg"],
+        text: "Each incident is saved if it is not there yet, so running the script twice creates no duplicates.",
+        files: ["repository/incident_repository.py"] },
+      { title: "Embedded and indexed in Qdrant", nodes: ["api", "ol", "qd"], arrows: ["a-ol", "a-qd"],
+        text: "Every incident goes through Ollama and is upserted into Qdrant under its PostgreSQL id. It uses the same indexer the API uses, and took about 4 seconds for 100 incidents.",
+        files: ["services/incident_indexer.py"] },
+      { title: "Ask 20 questions with known answers", nodes: ["client", "api", "ol", "qd", "pg"], arrows: ["a-client", "a-ol", "a-qd", "a-pg"],
+        text: "<code>python -m app.scripts.evaluate_search</code> asks 20 questions written in different words than the titles, for example &quot;no free space left on the server&quot;. Each question has a known right scenario. It uses the real search service.",
+        files: ["scripts/evaluate_search.py", "services/incident_search_service.py"] },
+      { title: "Count the right answers", nodes: ["api", "client"], arrows: ["a-client"],
+        text: "For each question it checks: was the first result from the right scenario, and how many of the top 5 were? In a first run, 18 of 20 questions (90 percent) had the right scenario first. The data is synthetic and small, so treat it as a baseline to compare later changes against, not as real-world accuracy.",
+        files: ["scripts/evaluate_search.py"],
+        note: "The two misses were about database connections: one returned your real incident (a fair answer, it just has no scenario tag), and one was led by the word &quot;checkout&quot;." },
+      { title: "Clean up when finished", nodes: ["api", "pg", "qd"], arrows: ["a-pg", "a-qd"],
+        text: "<code>python -m app.scripts.seed_incidents --clean</code> removes only the 100 seeded incidents from both PostgreSQL and Qdrant. Your own incidents stay.",
+        files: ["scripts/seed_incidents.py"] }
+    ]
+  }
+];
+
+var current = 0, stepIdx = 0;
+var tabsEl = document.getElementById("tabs");
+var stepbox = document.getElementById("stepbox");
+var dotsEl = document.getElementById("dots");
+var prevBtn = document.getElementById("prev");
+var nextBtn = document.getElementById("next");
+var NODE_IDS = ["client", "api", "pg", "qd", "ol"];
+var ARROW_IDS = ["a-client", "a-ol", "a-qd", "a-pg"];
+
+function renderTabs() {
+  tabsEl.innerHTML = "";
+  FLOWS.forEach(function (f, i) {
+    var b = document.createElement("button");
+    b.className = "tab"; b.setAttribute("role", "tab");
+    b.setAttribute("aria-selected", i === current ? "true" : "false");
+    b.textContent = f.label;
+    b.onclick = function () { current = i; stepIdx = 0; renderTabs(); renderStep(); };
+    tabsEl.appendChild(b);
+  });
+}
+
+function renderStep() {
+  var flow = FLOWS[current], s = flow.steps[stepIdx];
+  document.getElementById("t-client").textContent = flow.labels.client[0];
+  document.getElementById("s-client").textContent = flow.labels.client[1];
+  document.getElementById("t-api").textContent = flow.labels.api[0];
+  document.getElementById("s-api").textContent = flow.labels.api[1];
+  NODE_IDS.forEach(function (n) {
+    document.getElementById("n-" + n).classList.toggle("on", s.nodes.indexOf(n) !== -1);
+  });
+  ARROW_IDS.forEach(function (a) {
+    document.getElementById(a).classList.toggle("on", s.arrows.indexOf(a) !== -1);
+  });
+  var html = '<h3><span class="num">' + (stepIdx + 1) + '</span>' + s.title + '</h3><p>' + s.text + '</p>';
+  html += '<div class="files">' + s.files.map(function (f) { return '<span class="tag t-api">' + f + '</span>'; }).join("") + '</div>';
+  if (s.note) html += '<div class="note">' + s.note + '</div>';
+  stepbox.innerHTML = html;
+  dotsEl.innerHTML = flow.steps.map(function (_, i) { return '<span class="dot' + (i === stepIdx ? " on" : "") + '"></span>'; }).join("");
+  prevBtn.disabled = stepIdx === 0;
+  nextBtn.textContent = stepIdx === flow.steps.length - 1 ? "Restart ↺" : "Next →";
+}
+prevBtn.onclick = function () { if (stepIdx > 0) { stepIdx--; renderStep(); } };
+nextBtn.onclick = function () {
+  var n = FLOWS[current].steps.length;
+  stepIdx = stepIdx === n - 1 ? 0 : stepIdx + 1; renderStep();
+};
+document.addEventListener("keydown", function (e) {
+  if (e.target.tagName === "INPUT") return;
+  if (e.key === "ArrowRight") nextBtn.click();
+  if (e.key === "ArrowLeft") prevBtn.click();
+});
+
+/* ---------------- files ---------------- */
+var GROUPS = [
+  { name: "Start-up and configuration", tag: "t-cl", files: [
+    { p: "main.py", r: "The front door of the app", d: "Creates the FastAPI app, registers the incident, document and search routers, and adds <code>/health</code> and <code>/health/database</code>. At start-up it tries to create the Qdrant collection; if Qdrant is down it only logs a warning so the app still starts.", j: "Like the @SpringBootApplication class with main()." },
+    { p: "app/config/settings.py", r: "Reads configuration", d: "Loads values from <code>.env</code>: database URL, Qdrant URL, Ollama URL, embedding model and timeout. Missing optional values fall back to defaults.", j: "Like @ConfigurationProperties plus application.yml." },
+    { p: "app/config/connection.py", r: "Database connection", d: "Creates the SQLAlchemy engine (a connection pool that checks connections before use) and <code>SessionLocal</code>, the factory that makes one database session.", j: "Like the DataSource and EntityManagerFactory." },
+    { p: "app/config/qdrant.py", r: "Qdrant connection", d: "<code>get_qdrant_client()</code> returns one shared client, created the first time it is needed, so importing the file never touches the network.", j: "Like a singleton @Bean." },
+    { p: "requirements.txt", r: "Dependencies", d: "fastapi, uvicorn, pydantic-settings, sqlalchemy, psycopg, alembic, qdrant-client, httpx2 (needed by the test client), pytest.", j: "Like pom.xml." },
+    { p: "docker-compose.yml", r: "Runs Qdrant", d: "One service: Qdrant v1.20.2 on ports 6333 (REST) and 6334 (gRPC), with a volume so vectors survive restarts.", j: "Like a docker-compose for a dependency." },
+    { p: "pytest.ini", r: "Test settings", d: "Adds the project root to the Python path and points to the <code>tests</code> folder.", j: "" },
+    { p: "CLAUDE.md, README.md", r: "Project instructions and documentation", d: "CLAUDE.md holds the learning rules and tech choices. README.md describes the project and how to run it.", j: "" },
+    { p: "docs/opsmind-overview.html", r: "This page", d: "Step-by-step flows, every file explained, the data model, and a talk track.", j: "" },
+    { p: "docs/qdrant-story.html", r: "The Qdrant playground story", d: "A short animated story with subtitles that explains what Qdrant does, using a playground, a map, and name tags.", j: "" }
+  ]},
+  { name: "API layer (HTTP)", tag: "t-api", files: [
+    { p: "app/api/routes/incidents.py", r: "Incident endpoints", d: "<code>POST /incidents</code> (validate, save, index best-effort), <code>GET /incidents</code> (filters and paging), <code>GET /incidents/{id}</code> (404 if missing).", j: "Like a @RestController." },
+    { p: "app/api/routes/documents.py", r: "Document endpoints", d: "Create, get by id, and list documents (filter by service and type). Documents are only stored for now; they are not indexed for search yet.", j: "Another @RestController." },
+    { p: "app/api/routes/search.py", r: "Search endpoint", d: "<code>GET /search/incidents</code>. Validates the parameters, calls the search service, and turns Ollama or Qdrant outages into a 503.", j: "A controller delegating to a service." },
+    { p: "app/api/deps.py", r: "Wiring and transaction boundary", d: "<code>get_session</code> opens one DB session per request, commits if all went well, rolls back on error, and always closes it. It also builds the indexer and the search service for the routes.", j: "Like @Transactional plus @Autowired." },
+    { p: "app/api/dto/incident.py", r: "Incident shape and rules", d: "Enums for severity and status. <code>IncidentBase</code> holds the fields and rules (UTC dates, resolved_at not before reported_at, resolved needs resolved_at). <code>IncidentCreate</code> has no id; <code>Incident</code> adds the id.", j: "Like a DTO with Bean Validation." },
+    { p: "app/api/dto/document.py", r: "Document shape and rules", d: "Document types (runbook, troubleshooting guide, technical doc), a create model without id or created_at, and the full document.", j: "Another DTO." },
+    { p: "app/api/dto/limits.py", r: "Shared length limits", d: "Maximum lengths for title, service and source, used by both the DTOs and the table columns, so too-long input becomes a 422 instead of a database error.", j: "" }
+  ]},
+  { name: "Persistence (PostgreSQL)", tag: "t-pg", files: [
+    { p: "app/model/base.py", r: "Base class for tables", d: "The parent class every table class inherits. It also holds the catalog of tables that Alembic reads.", j: "Like the base of all @Entity classes." },
+    { p: "app/model/incident_record.py", r: "Table definition: incidents", d: "The 11 columns, CHECK constraints for severity and status (generated from the enums), and the index on (service, reported_at).", j: "Like an @Entity." },
+    { p: "app/model/document_record.py", r: "Table definition: documents", d: "Columns for documents, a CHECK on document type, and an index on service.", j: "Another @Entity." },
+    { p: "app/model/__init__.py", r: "Registers the tables", d: "Imports both table classes so that Alembic can see them when it compares models to the database.", j: "" },
+    { p: "app/repository/incident_mapper.py", r: "Converts between the two models", d: "<code>to_record</code> turns an <code>Incident</code> into a table row; <code>to_domain</code> turns a row back. Reading re-runs validation, so a corrupt row fails loudly.", j: "Like a MapStruct mapper." },
+    { p: "app/repository/incident_repository.py", r: "All incident database access", d: "<code>add</code> (insert and flush, never commit), <code>get</code>, <code>get_many</code> (many ids in one query), <code>list</code> (filters, newest first, paging), <code>delete</code> (used by the seed cleanup).", j: "Like a Spring Data repository." },
+    { p: "app/repository/document_mapper.py", r: "Document mapper", d: "Same idea as the incident mapper, for documents.", j: "" },
+    { p: "app/repository/document_repository.py", r: "Document database access", d: "<code>add</code>, <code>get</code>, <code>get_many</code> and <code>list</code> for documents.", j: "" },
+    { p: "alembic/env.py", r: "Migration set-up", d: "Reads the database URL from settings (not from alembic.ini) and compares your table classes to the real database.", j: "Like the Flyway configuration." },
+    { p: "alembic/versions/…create_incidents_table.py", r: "Migration 1", d: "Creates the incidents table, its constraints and index. Has a working downgrade.", j: "Like a Flyway V1__ script." },
+    { p: "alembic/versions/…create_documents_table.py", r: "Migration 2", d: "Creates the documents table and index. Builds on migration 1.", j: "Like V2__." }
+  ]},
+  { name: "AI and search (Ollama + Qdrant)", tag: "t-qd", files: [
+    { p: "app/services/embedding_service.py", r: "Talks to Ollama", d: "<code>embed(text)</code> and <code>embed_many(texts)</code> call Ollama's embed endpoint and return 768-number vectors. Connection problems, HTTP errors and malformed answers raise one clear <code>EmbeddingError</code>.", j: "Like a RestClient wrapper around an external service." },
+    { p: "app/services/incident_indexer.py", r: "Writes incidents into Qdrant", d: "<code>ensure_collection</code> (create it, or fail if the size is wrong), <code>incident_to_text</code> (what gets embedded), <code>incident_to_payload</code> (what is kept for filtering), and <code>IncidentIndexer.index / delete</code>.", j: "Like a Solr/Elasticsearch indexer." },
+    { p: "app/services/incident_search_service.py", r: "Searches by meaning", d: "Embeds the question, builds Qdrant filters, gets ids and scores, loads incidents from Postgres, keeps the ranking, and skips ids missing from Postgres. Returns <code>IncidentHit</code> (incident + score).", j: "A search service combining two data sources." },
+    { p: "app/services/reindex.py", r: "Rebuild logic", d: "<code>reindex_all</code> reads incidents from Postgres page by page and indexes each one. Safe to repeat.", j: "Like a re-index batch job." },
+    { p: "app/scripts/reindex.py", r: "Command-line entry for reindex", d: "Run with <code>python -m app.scripts.reindex</code>. Ensures the collection, then runs the rebuild and prints how many incidents it indexed.", j: "Like a CommandLineRunner." },
+    { p: "app/services/chunker.py", r: "Cuts long text into chunks", d: "<code>chunk_text(text, size=800, overlap=100)</code>. A pure function: chunks never exceed the size, neighbours share a little text, and cuts prefer a paragraph break, then a line, then a sentence end, then a space. It always moves forward, so it cannot loop forever.", j: "Like a text splitter utility." },
+    { p: "app/services/document_indexer.py", r: "Writes document chunks into Qdrant", d: "<code>DocumentIndexer.index(document)</code> chunks, embeds in batches (title added), upserts one point per chunk with id uuid5(document id, chunk number), then deletes chunks that no longer exist. Embedding happens before any write. <code>delete(document_id)</code> removes all its chunks.", j: "Like a bulk indexer into a search engine." },
+    { p: "app/services/document_search_service.py", r: "Searches documents by meaning", d: "Embeds the question, searches <code>document_chunks</code> with filters (a service filter also keeps global documents), keeps the best chunk per document, loads documents from Postgres, and returns <code>DocumentHit</code> (document, matched passage, chunk number, score).", j: "A search service that returns citations." },
+    { p: "app/scripts/seed_data.py", r: "The 100 test incidents", d: "10 scenarios × 10 differently worded incidents, with fixed ids, dates and a <code>seed</code> tag. Resolved ones carry a root cause and resolution; open and mitigated ones do not.", j: "Like a test fixture file." },
+    { p: "app/scripts/seed_incidents.py", r: "Load or remove the test incidents", d: "<code>python -m app.scripts.seed_incidents</code> saves them in PostgreSQL and indexes them in Qdrant (safe to repeat). <code>--clean</code> removes only the seeded ones from both.", j: "Like a database seeder." },
+    { p: "app/scripts/evaluate_search.py", r: "Measures search quality", d: "Asks 20 questions with known answers and reports whether the first result, and how many of the top 5, came from the right scenario.", j: "Like an evaluation harness." }
+  ]},
+  { name: "Tests", tag: "t-ol", files: [
+    { p: "tests/conftest.py", r: "Shared test tools", d: "The <code>session</code> fixture: a database session inside a transaction that is always rolled back, so tests leave no data. Also a fake indexer for API tests.", j: "Like @Transactional tests that roll back." },
+    { p: "tests/test_incident.py", r: "Incident rules", d: "Tests the validation: UTC conversion, date ordering, status consistency, bad enums.", j: "" },
+    { p: "tests/test_incident_mapper.py, test_document_mapper.py", r: "Mapper tests", d: "Round trips between DTO and table row, with no database.", j: "" },
+    { p: "tests/test_incident_repository.py, test_document_repository.py", r: "Database tests", d: "Add and get, duplicates, filters, paging, ordering and timezones, against real PostgreSQL.", j: "Like @DataJpaTest." },
+    { p: "tests/test_incident_api.py, test_document_api.py", r: "API tests", d: "Status codes, validation errors (422), 404s, list filters, and that creating an incident triggers indexing, even when indexing fails.", j: "Like MockMvc tests." },
+    { p: "tests/test_embedding_service.py", r: "Embedding client tests", d: "Mocked HTTP for every failure shape, plus real Ollama checks for 768 dimensions and sensible similarity.", j: "" },
+    { p: "tests/test_qdrant_hello.py, test_incident_indexer.py", r: "Qdrant tests", d: "Collections, search order, payload filters, upsert overwrite, size mismatch, all on temporary collections that are deleted afterwards.", j: "" },
+    { p: "tests/test_incident_search_service.py, test_search_api.py, test_reindex.py", r: "Search and reindex tests", d: "Ranking, filters, limits, min_score, missing Postgres rows, 422 and 503 behaviour, reindex paging, and a full end-to-end run through the API.", j: "" },
+    { p: "tests/test_chunker.py", r: "Chunker tests", d: "Blank and short text, size limits, paragraph boundaries, whole words, overlap, hard cuts, invalid settings, and that it always terminates. No services needed.", j: "" },
+    { p: "tests/test_document_indexer.py, test_document_search_service.py", r: "Document indexing and search tests", d: "One point per chunk, deterministic ids, idempotence, stale-chunk removal, batching, embedding failure, best passage per document, global documents, filters, and a real Ollama end-to-end test.", j: "" },
+    { p: "tests/test_seed_data.py", r: "Seed data and evaluation tests", d: "100 unique, stable incidents in 10 scenarios; seeding twice does not duplicate; clean removes only seeded ones; the evaluation maths on fake search results.", j: "" }
+  ]}
+];
+
+var listEl = document.getElementById("filelist");
+var countEl = document.getElementById("filecount");
+var searchEl = document.getElementById("search");
+function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;"); }
+
+function renderFiles(q) {
+  q = (q || "").toLowerCase().trim();
+  var shown = 0, html = "";
+  GROUPS.forEach(function (g) {
+    var cards = g.files.filter(function (f) {
+      if (!q) return true;
+      return (f.p + " " + f.r + " " + f.d + " " + f.j).toLowerCase().indexOf(q) !== -1;
+    });
+    if (!cards.length) return;
+    shown += cards.length;
+    html += '<div class="group"><h3><span class="tag ' + g.tag + '">' + g.name + '</span></h3>';
+    cards.forEach(function (f) {
+      html += '<div class="file"><div class="path-name">' + esc(f.p) + '</div><div class="role">' + f.r + '</div><p>' + f.d + '</p>' +
+              (f.j ? '<div class="java">≈ ' + f.j + '</div>' : '') + '</div>';
+    });
+    html += '</div>';
+  });
+  listEl.innerHTML = html || '<p class="muted">No file matches that search.</p>';
+  countEl.textContent = shown + " file entr" + (shown === 1 ? "y" : "ies") + (q ? " match" : "");
+}
+searchEl.addEventListener("input", function () { renderFiles(searchEl.value); });
+
+renderTabs(); renderStep(); renderFiles("");
+</script>
+</body>
+</html>

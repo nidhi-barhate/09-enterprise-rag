@@ -35,6 +35,15 @@ class IncidentRepository:
         stmt = select(IncidentRecord).where(IncidentRecord.id.in_(ids))
         return {r.id: to_domain(r) for r in self._session.scalars(stmt)}
 
+    def delete(self, incident_id: uuid.UUID) -> bool:
+        """Delete one incident. Returns False if it did not exist."""
+        record = self._session.get(IncidentRecord, incident_id)
+        if record is None:
+            return False
+        self._session.delete(record)
+        self._session.flush()
+        return True
+
     def list(
         self,
         *,

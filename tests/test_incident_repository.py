@@ -160,3 +160,18 @@ def test_get_many_returns_found_incidents_keyed_by_id(session):
 
 def test_get_many_with_no_ids_returns_empty_dict(session):
     assert IncidentRepository(session).get_many([]) == {}
+
+
+# --- delete ---
+
+
+def test_delete_removes_incident_and_reports_it(session):
+    repo = IncidentRepository(session)
+    incident = make_incident()
+    repo.add(incident)
+    assert repo.delete(incident.id) is True
+    assert repo.get(incident.id) is None
+
+
+def test_delete_unknown_id_returns_false(session):
+    assert IncidentRepository(session).delete(uuid.uuid4()) is False

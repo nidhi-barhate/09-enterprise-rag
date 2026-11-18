@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Qdrant Playground Story</title>
+<style>
+  :root { --bg:#f6f8fa; --card:#fff; --ink:#16202a; --muted:#566676; --line:#dde4ea; --accent:#0f766e; --code:#eef2f6; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0e151d; --card:#161f2a; --ink:#e8eef4; --muted:#9db0c1; --line:#2a3745; --accent:#2dd4bf; --code:#1d2835; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 24px 16px 70px; }
+  h1 { font-size: 1.6rem; margin: 0 0 4px; }
+  .lead { color: var(--muted); margin: 0 0 16px; }
+  .video { border-radius: 16px; overflow: hidden; border: 1px solid var(--line); background:#0f172a; }
+  .stage { position: relative; background:#d9f2c9; aspect-ratio: 16/9; }
+  svg { width:100%; height:100%; display:block; }
+  /* subtitles live in their own bar under the picture, so they never hide the story */
+  .caption { color:#fff; padding:10px 18px; min-height:3.6em; display:flex; align-items:center; justify-content:center;
+    font-size:clamp(15px,2.4vw,22px); line-height:1.4; text-align:center; }
+  .bigplay { position:absolute; inset:0; margin:auto; width:120px; height:120px; border-radius:50%; border:0; background:rgba(15,118,110,.92); color:#fff; font-size:44px; cursor:pointer; box-shadow:0 8px 30px rgba(0,0,0,.25); }
+  .bigplay.hidden { display:none; }
+  .controls { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:12px; }
+  .btn { cursor:pointer; border:1px solid var(--line); background:var(--card); color:var(--ink); padding:7px 14px; border-radius:9px; font:inherit; font-size:.92rem; }
+  .btn:hover { border-color:var(--accent); color:var(--accent); }
+  .btn.on { background:var(--accent); color:#fff; border-color:var(--accent); }
+  @media (prefers-color-scheme: dark) { .btn.on { color:#062b27; } }
+  input[type=range] { flex:1 1 200px; min-width:140px; accent-color: var(--accent); }
+  select { padding:6px 8px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); font:inherit; }
+  .time { font-variant-numeric: tabular-nums; color:var(--muted); font-size:.9rem; min-width:84px; }
+  .chapters { display:flex; flex-wrap:wrap; gap:6px; margin-top:12px; }
+  .chap { cursor:pointer; border:1px solid var(--line); background:var(--card); color:var(--ink); padding:4px 10px; border-radius:999px; font:inherit; font-size:.8rem; }
+  .chap.cur { background:var(--accent); color:#fff; border-color:var(--accent); }
+  @media (prefers-color-scheme: dark) { .chap.cur { color:#062b27; } }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px 20px; margin-top:22px; }
+  table { width:100%; border-collapse:collapse; font-size:.92rem; }
+  th,td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--muted); font-size:.78rem; text-transform:uppercase; letter-spacing:.04em; }
+  code { background:var(--code); padding:1px 6px; border-radius:5px; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:.86em; }
+  .tw { overflow-x:auto; }
+  .hint { color:var(--muted); font-size:.88rem; margin-top:10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>The Playground Story: what Qdrant does</h1>
+  <p class="lead">A short animated story with subtitles. Press play, or jump to any part below the video.</p>
+
+  <div class="video">
+    <div class="stage" id="stage">
+      <svg id="svg" viewBox="0 0 800 450" role="img" aria-label="Animated playground story explaining Qdrant"></svg>
+      <button class="bigplay" id="bigplay" aria-label="Play the story">▶</button>
+    </div>
+    <div class="caption" id="caption" aria-live="off"></div>
+  </div>
+
+  <div class="controls">
+    <button class="btn" id="play">▶ Play</button>
+    <button class="btn" id="restart" title="Start again">↺</button>
+    <input type="range" id="scrub" min="0" max="116" step="0.05" value="0" aria-label="Position in the story">
+    <span class="time" id="time">0:00 / 1:56</span>
+    <select id="speed" aria-label="Speed"><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option></select>
+    <button class="btn on" id="cc" aria-pressed="true">Subtitles: on</button>
+    <button class="btn" id="voice" aria-pressed="false">🔈 Read aloud: off</button>
+  </div>
+  <div class="chapters" id="chapters"></div>
+  <p class="hint">Keyboard: Space = play/pause, ← → = 5 seconds back or forward. "Read aloud" uses your browser's built-in voice and may not match the timing exactly; the subtitles always do.</p>
+
+  <div class="card">
+    <h2 style="margin:0 0 8px;font-size:1.15rem">The story ↔ the real system</h2>
+    <div class="tw"><table>
+      <tr><th>In the story</th><th>In OpsMind</th></tr>
+      <tr><td>🛝 The playground (the map)</td><td>A Qdrant <b>collection</b> named <code>incidents</code></td></tr>
+      <tr><td>🧒 A kid standing on it</td><td>A <b>point</b>: one incident</td></tr>
+      <tr><td>📍 Where the kid stands</td><td>The <b>vector</b>: 768 numbers made by Ollama</td></tr>
+      <tr><td>🏷️ Name tag</td><td>The point <b>id</b>: the same UUID as in PostgreSQL</td></tr>
+      <tr><td>🎖️ Badges</td><td>The <b>payload</b>: service, severity, status, tags (used for filters)</td></tr>
+      <tr><td>⭐ The question</td><td>The question's vector, made by the same Ollama model</td></tr>
+      <tr><td>📏 How close</td><td>The <b>score</b> (cosine similarity, 1 = very close)</td></tr>
+      <tr><td>🦉 Ollie the owl</td><td>Ollama with <code>nomic-embed-text</code> · <code>services/embedding_service.py</code></td></tr>
+      <tr><td>🤖 Q the map keeper</td><td>Qdrant in Docker (port 6333) · <code>services/incident_indexer.py</code> puts kids on the map, <code>services/incident_search_service.py</code> asks who is nearest</td></tr>
+      <tr><td>🗄️ School records</td><td>The PostgreSQL <code>incidents</code> table · <code>repository/incident_repository.py</code></td></tr>
+    </table></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var TOTAL = 116;
+  var NS = "http://www.w3.org/2000/svg";
+  var svg = document.getElementById("svg");
+
+  function el(tag, attrs, parent) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  function clamp(x) { return Math.min(1, Math.max(0, x)); }
+  function seg(t, a, b) { return clamp((t - a) / (b - a)); }
+  function ease(x) { return x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2; }
+  function win(t, a, b, c, d) { return seg(t, a, b) * (1 - seg(t, c, d)); }
+  function lerp(a, b, x) { return a + (b - a) * x; }
+  function fmt(s) { s = Math.floor(s); return Math.floor(s / 60) + ":" + (s % 60 < 10 ? "0" : "") + (s % 60); }
+
+  var FONT = "-apple-system, 'Segoe UI', Roboto, sans-serif";
+  var EMOJI = "'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',sans-serif";
+
+  /* ---------- world (the playground) ---------- */
+  var world = el("g", {}, svg);
+  el("rect", { width: 800, height: 450, fill: "#d9f2c9" }, world);
+  for (var gx = 50; gx < 800; gx += 50) el("line", { x1: gx, y1: 0, x2: gx, y2: 450, stroke: "#c6e8b3", "stroke-width": 1 }, world);
+  for (var gy = 50; gy < 450; gy += 50) el("line", { x1: 0, y1: gy, x2: 800, y2: gy, stroke: "#c6e8b3", "stroke-width": 1 }, world);
+  var mapLabel = el("text", { x: 16, y: 438, "font-size": 13, "font-weight": 700, fill: "#3f6212", "font-family": FONT }, world);
+  mapLabel.textContent = "The playground = the map";
+
+  var STAR = { x: 555, y: 160 };
+  var zone = el("circle", { cx: STAR.x, cy: STAR.y, r: 0, fill: "rgba(250,204,21,.16)", stroke: "#eab308", "stroke-width": 2, "stroke-dasharray": "6 6" }, world);
+
+  /* ---------- kids ---------- */
+  var KIDS = [
+    { id: "A", emoji: "🧒", label: "payment 503 errors", from: [210, 150], to: [520, 190], team: "payment-service", score: "0.99", good: true, t0: 6.0, mv: [15, 20], coord: "(0.90, 0.10)" },
+    { id: "B", emoji: "👧", label: "payments failing after release", from: [620, 330], to: [595, 245], team: "payment-service", score: "0.98", good: true, t0: 6.6, mv: [16.5, 21.5], coord: "(0.85, 0.20)" },
+    { id: "C", emoji: "👦", label: "search results stale", from: [400, 165], to: [190, 330], team: "search-service", score: "0.20", good: false, t0: 7.2, mv: [18, 23], coord: "(0.10, 0.90)" },
+    { id: "D", emoji: "🧑", label: "billing 503 errors", from: [465, 285], to: [465, 285], team: "billing-service", score: "0.93", good: true, t0: 75, mv: [0, 0], coord: "" }
+  ];
+
+  var memLines = [];
+  KIDS.slice(0, 3).forEach(function (k) {
+    k.mem = el("line", { stroke: "#64748b", "stroke-width": 2, "stroke-dasharray": "4 6", opacity: 0 }, world);
+  });
+
+  KIDS.forEach(function (k) {
+    var g = el("g", {}, world); k.g = g;
+    k.glow = el("circle", { r: 34, fill: "#fde047", opacity: 0 }, g);
+    k.face = el("text", { "font-size": 38, "text-anchor": "middle", "dominant-baseline": "central", "font-family": EMOJI }, g);
+    k.face.textContent = k.emoji;
+    var w = k.label.length * 6.1 + 18;
+    el("rect", { x: -w / 2, y: 24, width: w, height: 20, rx: 10, fill: "#fff", stroke: "#b8c9ad" }, g);
+    var lt = el("text", { y: 38, "text-anchor": "middle", "font-size": 11, fill: "#1f2937", "font-family": FONT }, g);
+    lt.textContent = k.label;
+    k.teamG = el("g", {}, g);
+    var tw = k.team.length * 6 + 16;
+    el("rect", { x: -tw / 2, y: 48, width: tw, height: 18, rx: 9, fill: "#dbeafe", stroke: "#93c5fd" }, k.teamG);
+    var tt = el("text", { y: 61, "text-anchor": "middle", "font-size": 10, fill: "#1e3a8a", "font-weight": 700, "font-family": FONT }, k.teamG);
+    tt.textContent = "🎖️ " + k.team;
+    k.coordT = el("text", { y: -30, "text-anchor": "middle", "font-size": 12, "font-weight": 700, fill: "#9a3412", "font-family": FONT, stroke: "#fff", "stroke-width": 3, "paint-order": "stroke" }, g);
+    k.coordT.textContent = k.coord;
+    k.scoreG = el("g", { transform: "translate(-23,-64)" }, g);
+    el("rect", { width: 46, height: 20, rx: 10, fill: k.good ? "#16a34a" : "#6b7280" }, k.scoreG);
+    var st = el("text", { x: 23, y: 14, "text-anchor": "middle", "font-size": 12, "font-weight": 700, fill: "#fff", "font-family": FONT }, k.scoreG);
+    st.textContent = k.score;
+    k.cross = el("text", { x: -34, y: -14, "font-size": 24, "font-family": EMOJI }, g);
+    k.cross.textContent = "❌";
+  });
+
+  /* ---------- star (the question) ---------- */
+  var starG = el("g", {}, world);
+  var starT = el("text", { "font-size": 36, "text-anchor": "middle", "dominant-baseline": "central", "font-family": EMOJI }, starG);
+  starT.textContent = "⭐";
+  var starL = el("text", { y: -30, "text-anchor": "middle", "font-size": 12, "font-weight": 700, fill: "#854d0e", "font-family": FONT, stroke: "#fff", "stroke-width": 3, "paint-order": "stroke" }, starG);
+  starL.textContent = "the question";
+
+  /* ---------- characters ---------- */
+  function character(emoji, name, x, y) {
+    var g = el("g", { transform: "translate(" + x + "," + y + ")" }, world);
+    var f = el("text", { "font-size": 46, "text-anchor": "middle", "dominant-baseline": "central", "font-family": EMOJI }, g);
+    f.textContent = emoji;
+    var w = name.length * 6.6 + 18;
+    el("rect", { x: -w / 2, y: 28, width: w, height: 20, rx: 10, fill: "#0f766e" }, g);
+    var t = el("text", { y: 42, "text-anchor": "middle", "font-size": 11, "font-weight": 700, fill: "#fff", "font-family": FONT }, g);
+    t.textContent = name;
+    return g;
+  }
+  function bubble(x, y, w) {
+    var g = el("g", { transform: "translate(" + x + "," + y + ")" }, world);
+    el("rect", { width: w, height: 30, rx: 14, fill: "#fff", stroke: "#94a3b8", "stroke-width": 1.5 }, g);
+    var t = el("text", { x: w / 2, y: 20, "text-anchor": "middle", "font-size": 13, "font-weight": 600, fill: "#0f172a", "font-family": FONT }, g);
+    return { g: g, t: t, last: null };
+  }
+  var ollie = character("🦉", "Ollie (Ollama)", 70, 120);
+  var ollieB = bubble(112, 96, 260);
+  var qbot = character("🤖", "Q (Qdrant)", 400, 52);
+  var qB = bubble(120, 22, 250);
+
+  /* ---------- cards ---------- */
+  function card(x, y, w, h, lines, fill, stroke) {
+    var g = el("g", { transform: "translate(" + x + "," + y + ")" }, world);
+    el("rect", { width: w, height: h, rx: 10, fill: fill || "#fff", stroke: stroke || "#94a3b8", "stroke-width": 1.5 }, g);
+    var ts = [];
+    lines.forEach(function (ln, i) {
+      var t = el("text", { x: 10, y: 19 + i * 20, "font-size": 12.5, "font-weight": i === 0 ? 700 : 500, fill: "#0f172a", "font-family": FONT }, g);
+      t.textContent = ln; ts.push(t);
+    });
+    return g;
+  }
+  var tagCard = card(585, 26, 205, 84, ["🏷️ Name tag = the ID", "b2a5b49a-5b24-…", "🎖️ payment-service · SEV2"], "#fffbeb", "#f59e0b");
+  var tagLine = el("line", { x1: 600, y1: 110, x2: 540, y2: 172, stroke: "#f59e0b", "stroke-width": 2, "stroke-dasharray": "4 4" }, world);
+  var nameA = card(565, 24, 215, 28, ["Kid A  🏷️ b2a5b49a…"], "#fffbeb", "#f59e0b");
+  var nameB = card(565, 58, 215, 28, ["Kid B  🏷️ 7c1d03fe…"], "#fffbeb", "#f59e0b");
+
+  var banner = el("g", { transform: "translate(400,122)" }, world);
+  el("rect", { x: -150, y: -15, width: 300, height: 30, rx: 15, fill: "#fef3c7", stroke: "#f59e0b", "stroke-width": 2 }, banner);
+  var bt = el("text", { y: 5, "text-anchor": "middle", "font-size": 14, "font-weight": 700, fill: "#92400e", "font-family": FONT }, banner);
+  bt.textContent = "Filter: only payment-service kids";
+
+  var numNote = el("g", { transform: "translate(400,404)" }, world);
+  el("rect", { x: -190, y: -17, width: 380, height: 34, rx: 17, fill: "#fff", stroke: "#fb923c", "stroke-width": 2 }, numNote);
+  var nt = el("text", { y: 6, "text-anchor": "middle", "font-size": 15, "font-weight": 700, fill: "#9a3412", "font-family": FONT }, numNote);
+  nt.textContent = "Ollie's real map needs 768 numbers per spot!";
+
+  var cabinet = character("🗄️", "School records (PostgreSQL)", 685, 372);
+  var folderA = card(400, 346, 165, 30, ["📁 A: the full story"], "#eff6ff", "#60a5fa");
+  var folderB = card(400, 386, 165, 30, ["📁 B: the full story"], "#eff6ff", "#60a5fa");
+  var openText = el("text", { x: 400, y: 338, "font-size": 12, "font-weight": 700, fill: "#1e3a8a", "font-family": FONT, stroke: "#fff", "stroke-width": 3, "paint-order": "stroke" }, world);
+  openText.textContent = "The name tag opens the right folder ➜";
+
+  /* ---------- UI overlays (title, recap) ---------- */
+  var ui = el("g", {}, svg);
+  var title = el("g", {}, ui);
+  el("rect", { x: 110, y: 130, width: 580, height: 170, rx: 22, fill: "rgba(255,255,255,.95)", stroke: "#0f766e", "stroke-width": 3 }, title);
+  var t1 = el("text", { x: 400, y: 202, "text-anchor": "middle", "font-size": 36, "font-weight": 800, fill: "#0f766e", "font-family": FONT }, title);
+  t1.textContent = "How does Qdrant work?";
+  var t2 = el("text", { x: 400, y: 248, "text-anchor": "middle", "font-size": 19, fill: "#334155", "font-family": FONT }, title);
+  t2.textContent = "A playground story for curious kids";
+  var t3 = el("text", { x: 400, y: 282, "text-anchor": "middle", "font-size": 30, "font-family": EMOJI }, title);
+  t3.textContent = "🦉 🤖 🗄️";
+
+  var recap = el("g", {}, ui);
+  el("rect", { x: 40, y: 60, width: 720, height: 300, rx: 22, fill: "rgba(255,255,255,.97)", stroke: "#0f766e", "stroke-width": 3 }, recap);
+  var rh = el("text", { x: 400, y: 100, "text-anchor": "middle", "font-size": 24, "font-weight": 800, fill: "#0f766e", "font-family": FONT }, recap);
+  rh.textContent = "Remember!";
+  var cols = [
+    { x: 160, e: "🦉", n: "Ollie (Ollama)", d: ["Decides where each kid stands", "(turns text into numbers)"] },
+    { x: 400, e: "🤖", n: "Q (Qdrant)", d: ["Remembers every spot", "and finds who is closest"] },
+    { x: 640, e: "🗄️", n: "School records (PostgreSQL)", d: ["Keeps the full story", "of every incident"] }
+  ];
+  cols.forEach(function (c) {
+    c.g = el("g", {}, recap);
+    var e = el("text", { x: c.x, y: 190, "text-anchor": "middle", "font-size": 58, "font-family": EMOJI }, c.g); e.textContent = c.e;
+    var n = el("text", { x: c.x, y: 232, "text-anchor": "middle", "font-size": 15, "font-weight": 800, fill: "#0f172a", "font-family": FONT }, c.g); n.textContent = c.n;
+    c.d.forEach(function (ln, i) {
+      var d = el("text", { x: c.x, y: 262 + i * 20, "text-anchor": "middle", "font-size": 14, fill: "#334155", "font-family": FONT }, c.g); d.textContent = ln;
+    });
+  });
+
+  /* ---------- subtitles ---------- */
+  var SUBS = [
+    [0, 6, "Let's learn how Qdrant works, with a story about a playground."],
+    [6, 10, "Imagine a giant playground."],
+    [10, 14, "Every problem that ever happened is a kid, standing somewhere on it."],
+    [14, 19, "Meet Ollie the owl. Ollie reads each problem and decides where that kid should stand."],
+    [19, 24, "Problems that mean the same thing stand close together."],
+    [24, 29, "Where a kid stands is just numbers, like a treasure map: 9 steps right, 1 step up."],
+    [29, 34, "Ollie's playground is so big that every spot needs 768 numbers!"],
+    [34, 39, "Now meet Q, the map keeper. Q is Qdrant."],
+    [39, 43, "Q's job is to remember exactly where every kid stands."],
+    [43, 48, "Every kid wears a name tag. That is the ID."],
+    [48, 53, "And badges, like which team they belong to. Badges are used to filter."],
+    [53, 58, "Now someone asks a question: \"Payments are failing after the deploy!\""],
+    [58, 62, "Ollie puts the question on the playground too. The star is the question."],
+    [62, 68, "Q checks who is standing closest to the star."],
+    [68, 74, "Kid A and Kid B are very close. Kid C is far. A score near 1 means very close."],
+    [74, 79, "What if another kid is close too, but is on a different team?"],
+    [79, 85, "Q can say: only show me kids with this badge! That is a filter."],
+    [85, 89, "But careful: Q only remembers names and spots."],
+    [89, 93, "Q says: the closest are A and B! It does not know their whole story."],
+    [93, 98, "The whole story is kept in the school records. That is PostgreSQL."],
+    [98, 104, "We use the name tag to open the right folder and read the full story."],
+    [104, 108, "So: Ollie decides where each kid stands."],
+    [108, 112, "Q remembers the spots and finds who is closest."],
+    [112, 116, "The school records keep the full story. The end!"]
+  ];
+  var CHAPTERS = [
+    [0, "Start"], [6, "The playground"], [14, "Ollie places the kids"], [24, "Spots are numbers"], [34, "Meet Q"],
+    [43, "Name tags and badges"], [53, "A question arrives"], [62, "Find the closest"], [74, "Filters"],
+    [85, "Q only knows names"], [93, "School records"], [104, "Recap"]
+  ];
+
+  /* ---------- render(t): everything is a pure function of time ---------- */
+  function setBubble(b, text, op) {
+    if (b.last !== text) { b.t.textContent = text; b.last = text; }
+    b.g.setAttribute("opacity", text ? op : 0);
+  }
+
+  function render(t) {
+    // global dim for the recap
+    world.setAttribute("opacity", 1 - 0.75 * seg(t, 104, 105.5));
+    title.setAttribute("opacity", seg(t, 0, 1) * (1 - seg(t, 5.5, 6.5)));
+    recap.setAttribute("opacity", seg(t, 104, 105.5));
+    cols.forEach(function (c, i) { c.g.setAttribute("opacity", seg(t, [104.5, 108.5, 112][i], [106, 110, 113.5][i])); });
+    mapLabel.setAttribute("opacity", seg(t, 7, 8));
+
+    // kids
+    KIDS.forEach(function (k) {
+      var m = k.mv[1] > 0 ? ease(seg(t, k.mv[0], k.mv[1])) : 1;
+      var x = lerp(k.from[0], k.to[0], m), y = lerp(k.from[1], k.to[1], m);
+      var after = 1 - seg(t, 93, 94);
+      var op = seg(t, k.t0, k.t0 + 1.2);
+      if (k.id === "C") op *= 1 - 0.55 * seg(t, 68, 69.5) * after;
+      if (k.id === "D") op *= (1 - 0.55 * seg(t, 81, 82.5) * after) * (1 - seg(t, 86, 88));
+      k.g.setAttribute("transform", "translate(" + x.toFixed(1) + "," + y.toFixed(1) + ")");
+      k.g.setAttribute("opacity", op);
+      k.k = { x: x, y: y };
+      k.coordT.setAttribute("opacity", k.coord ? win(t, 25, 26, 33, 34) : 0);
+      var showScore = k.id === "D" ? 0 : seg(t, 68, 69.5) * after;
+      k.scoreG.setAttribute("opacity", showScore);
+      k.glow.setAttribute("opacity", k.good && k.id !== "D" ? 0.85 * seg(t, 68, 69.5) * after : 0);
+      k.glow.setAttribute("r", 34 + 3 * Math.sin(t * 4));
+      k.teamG.setAttribute("opacity", seg(t, 76, 77) * after);
+      k.cross.setAttribute("opacity", (k.id === "C" || k.id === "D") ? seg(t, 81, 82) * after : 0);
+    });
+    KIDS.slice(0, 3).forEach(function (k) {
+      k.mem.setAttribute("x1", 400); k.mem.setAttribute("y1", 74);
+      k.mem.setAttribute("x2", k.k.x); k.mem.setAttribute("y2", k.k.y - 20);
+      k.mem.setAttribute("opacity", 0.55 * win(t, 39, 41, 62, 63));
+    });
+
+    // star + zone
+    var pop = seg(t, 55, 57);
+    var sc = pop < 1 ? (1 + 0.5 * Math.sin(pop * Math.PI)) * pop : 1;
+    starG.setAttribute("transform", "translate(" + STAR.x + "," + STAR.y + ") scale(" + sc.toFixed(3) + ")");
+    starG.setAttribute("opacity", seg(t, 55, 56) * (1 - seg(t, 104, 105)));
+    var ring = ease(seg(t, 62, 70));
+    zone.setAttribute("r", 170 * ring);
+    zone.setAttribute("opacity", ring > 0 ? (t < 70 ? 0.9 : 0.55) * (1 - seg(t, 93, 94)) : 0);
+
+    // characters and bubbles
+    ollie.setAttribute("opacity", win(t, 14, 15, 34, 35) + win(t, 53, 54, 62, 63));
+    var ob = "", ob_op = 1;
+    if (t >= 14.5 && t < 24) ob = "Hoo! You stand here, and you stand there!";
+    else if (t >= 24 && t < 34) ob = "A spot is just a list of numbers!";
+    else if (t >= 54 && t < 63) ob = "I put the question on the map too!";
+    setBubble(ollieB, ob, 1);
+
+    qbot.setAttribute("opacity", win(t, 35, 36, 104, 105));
+    var qb = "";
+    if (t >= 36 && t < 43) qb = "I remember where everyone stands!";
+    else if (t >= 62.5 && t < 74) qb = "Closest to the star: A and B!";
+    else if (t >= 74 && t < 85) qb = "Only kids with this badge, please!";
+    else if (t >= 85 && t < 93) qb = "The closest are A and B! (names only)";
+    setBubble(qB, qb, 1);
+
+    // cards and banners
+    tagCard.setAttribute("opacity", win(t, 43.5, 44.5, 53, 54));
+    tagLine.setAttribute("opacity", win(t, 43.5, 44.5, 53, 54));
+    banner.setAttribute("opacity", win(t, 79, 80, 93, 94));
+    numNote.setAttribute("opacity", win(t, 29, 30, 34, 35));
+    var nm = win(t, 89, 90, 104, 105);
+    nameA.setAttribute("opacity", nm); nameB.setAttribute("opacity", nm);
+    cabinet.setAttribute("opacity", win(t, 93, 94.5, 104, 105));
+    var fo = win(t, 96, 98, 104, 105);
+    var slide = 1 - ease(seg(t, 96, 98));
+    folderA.setAttribute("opacity", fo); folderB.setAttribute("opacity", fo);
+    folderA.setAttribute("transform", "translate(" + (400 + 120 * slide) + ",346)");
+    folderB.setAttribute("transform", "translate(" + (400 + 120 * slide) + ",386)");
+    openText.setAttribute("opacity", win(t, 97.5, 98.5, 104, 105));
+  }
+
+  /* ---------- player ---------- */
+  var capEl = document.getElementById("caption");
+  var scrub = document.getElementById("scrub");
+  var timeEl = document.getElementById("time");
+  var playBtn = document.getElementById("play");
+  var bigplay = document.getElementById("bigplay");
+  var ccBtn = document.getElementById("cc");
+  var voiceBtn = document.getElementById("voice");
+  var speedSel = document.getElementById("speed");
+  var chapEl = document.getElementById("chapters");
+  var t = 0, playing = false, last = 0, speed = 1, ccOn = true, voiceOn = false, lastSub = -2;
+
+  var chapBtns = CHAPTERS.map(function (c, i) {
+    var b = document.createElement("button");
+    b.className = "chap"; b.textContent = (i + 1) + ". " + c[1];
+    b.onclick = function () { seek(c[0] + 0.05); };
+    chapEl.appendChild(b); return b;
+  });
+
+  function subIndex(time) {
+    for (var i = 0; i < SUBS.length; i++) if (time >= SUBS[i][0] && time < SUBS[i][1]) return i;
+    return -1;
+  }
+  function speak(text) {
+    if (!voiceOn || !("speechSynthesis" in window)) return;
+    window.speechSynthesis.cancel();
+    var u = new SpeechSynthesisUtterance(text);
+    u.rate = 1.0; u.pitch = 1.15;
+    window.speechSynthesis.speak(u);
+  }
+  function update() {
+    render(t);
+    scrub.value = t;
+    timeEl.textContent = fmt(t) + " / " + fmt(TOTAL);
+    var si = subIndex(t);
+    capEl.textContent = (ccOn && si >= 0) ? SUBS[si][2] : "";
+    if (si !== lastSub) { lastSub = si; if (playing && si >= 0) speak(SUBS[si][2]); }
+    var cur = 0;
+    CHAPTERS.forEach(function (c, i) { if (t >= c[0]) cur = i; });
+    chapBtns.forEach(function (b, i) { b.classList.toggle("cur", i === cur); });
+  }
+  function tick(now) {
+    if (!playing) return;
+    t = Math.min(TOTAL, t + (now - last) / 1000 * speed);
+    last = now;
+    update();
+    if (t >= TOTAL) { pause(); return; }
+    requestAnimationFrame(tick);
+  }
+  function play() {
+    if (t >= TOTAL - 0.05) t = 0;
+    playing = true; last = performance.now();
+    playBtn.textContent = "❚❚ Pause"; bigplay.classList.add("hidden");
+    lastSub = -2;
+    requestAnimationFrame(tick);
+  }
+  function pause() {
+    playing = false; playBtn.textContent = (t >= TOTAL) ? "↺ Replay" : "▶ Play";
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+  }
+  function seek(x) { t = Math.max(0, Math.min(TOTAL, x)); lastSub = -2; update(); if (!playing) bigplay.classList.add("hidden"); }
+
+  playBtn.onclick = function () { playing ? pause() : play(); };
+  bigplay.onclick = play;
+  document.getElementById("restart").onclick = function () { seek(0); if (!playing) play(); };
+  scrub.oninput = function () { seek(parseFloat(scrub.value)); };
+  speedSel.onchange = function () { speed = parseFloat(speedSel.value); };
+  ccBtn.onclick = function () {
+    ccOn = !ccOn; ccBtn.classList.toggle("on", ccOn); ccBtn.setAttribute("aria-pressed", ccOn);
+    ccBtn.textContent = "Subtitles: " + (ccOn ? "on" : "off"); update();
+  };
+  voiceBtn.onclick = function () {
+    voiceOn = !voiceOn; voiceBtn.classList.toggle("on", voiceOn); voiceBtn.setAttribute("aria-pressed", voiceOn);
+    voiceBtn.textContent = "🔈 Read aloud: " + (voiceOn ? "on" : "off");
+    if (!voiceOn && "speechSynthesis" in window) window.speechSynthesis.cancel();
+    if (voiceOn && playing) { lastSub = -2; update(); }
+  };
+  document.addEventListener("keydown", function (e) {
+    if (e.target.tagName === "SELECT") return;
+    if (e.code === "Space" && e.target.tagName !== "BUTTON") { e.preventDefault(); playing ? pause() : play(); }
+    if (e.key === "ArrowRight") seek(t + 5);
+    if (e.key === "ArrowLeft") seek(t - 5);
+  });
+
+  window.__story = { seek: seek, play: play, pause: pause };
+  update();
+})();
+</script>
+</body>
+</html>
