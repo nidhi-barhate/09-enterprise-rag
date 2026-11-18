@@ -7,6 +7,12 @@ class Settings(BaseSettings):
     debug: bool = True
 
     database_url: str
+    qdrant_url: str = "http://localhost:6333"
+
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_model_embedding: str = "nomic-embed-text:latest"
+    # Embeddings are fast; keep this far below the 300s used for chat models.
+    ollama_embedding_timeout: float = 30.0
 
     model_config = SettingsConfigDict(
         env_file=".env",

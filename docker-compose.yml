@@ -1,0 +1,14 @@
+services:
+  qdrant:
+    # Pinned to the version first run reported, to avoid surprise upgrades.
+    image: qdrant/qdrant:v1.20.2
+    container_name: opsmind-qdrant
+    ports:
+      - "6333:6333"   # REST API + web dashboard (http://localhost:6333/dashboard)
+      - "6334:6334"   # gRPC
+    volumes:
+      - qdrant_storage:/qdrant/storage   # vectors survive container restarts
+    restart: unless-stopped
+
+volumes:
+  qdrant_storage:
