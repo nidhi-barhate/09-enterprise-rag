@@ -70,3 +70,19 @@ def test_database_rejects_unknown_doc_type(session):
     )
     with pytest.raises(IntegrityError):
         session.flush()
+
+
+# --- get_many ---
+
+
+def test_get_many_returns_found_documents_keyed_by_id(session):
+    repo = DocumentRepository(session)
+    a, b = make_document(), make_document()
+    repo.add(a)
+    repo.add(b)
+    session.expire_all()
+    assert repo.get_many([a.id, b.id, uuid.uuid4()]) == {a.id: a, b.id: b}
+
+
+def test_get_many_with_no_ids_returns_empty_dict(session):
+    assert DocumentRepository(session).get_many([]) == {}

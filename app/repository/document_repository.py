@@ -1,4 +1,5 @@
 import uuid
+from collections.abc import Iterable
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -21,6 +22,14 @@ class DocumentRepository:
     def get(self, document_id: uuid.UUID) -> Document | None:
         record = self._session.get(DocumentRecord, document_id)
         return None if record is None else to_domain(record)
+
+    def get_many(self, document_ids: Iterable[uuid.UUID]) -> dict[uuid.UUID, Document]:
+        """One query for many ids. Unknown ids are simply absent from the result."""
+        ids = set(document_ids)
+        if not ids:
+            return {}
+        stmt = select(DocumentRecord).where(DocumentRecord.id.in_(ids))
+        return {r.id: to_domain(r) for r in self._session.scalars(stmt)}
 
     def list(
         self,

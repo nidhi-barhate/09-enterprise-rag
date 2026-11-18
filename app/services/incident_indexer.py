@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from typing import Protocol
 
 from qdrant_client import QdrantClient
@@ -8,6 +9,8 @@ from app.api.dto.incident import Incident
 INCIDENTS_COLLECTION = "incidents"
 # nomic-embed-text produces 768-dimensional vectors (verified against Ollama).
 EMBEDDING_DIMENSIONS = 768
+# Payload fields that incident searches filter on (they get a keyword index).
+INCIDENT_FILTER_FIELDS = ("service", "severity", "status")
 
 
 class Embedder(Protocol):
@@ -18,6 +21,7 @@ def ensure_collection(
     client: QdrantClient,
     name: str = INCIDENTS_COLLECTION,
     size: int = EMBEDDING_DIMENSIONS,
+    keyword_fields: Sequence[str] = INCIDENT_FILTER_FIELDS,
 ) -> None:
     """Create the collection if missing. Fail loudly if it exists with another size.
 
@@ -38,7 +42,7 @@ def ensure_collection(
         vectors_config=VectorParams(size=size, distance=Distance.COSINE),
     )
     # Keyword indexes make payload filtering fast once the collection grows.
-    for field in ("service", "severity", "status"):
+    for field in keyword_fields:
         client.create_payload_index(
             collection_name=name,
             field_name=field,
